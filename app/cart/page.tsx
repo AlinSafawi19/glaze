@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Minus, Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import { H2, H4, SubtitleMd, BodySm, ItalicBodyLg } from "@/components/ui/typography";
 import { OutlineButton, FilledButton } from "@/components/ui/button";
+import { QtyStepper } from "@/components/ui/qty-stepper";
 import { useCart } from "@/components/ui/use-cart";
 import { useProducts } from "@/components/ui/use-products";
 import { useLoadingGate } from "@/components/ui/loading-gate";
@@ -101,25 +102,11 @@ export default function Cart() {
                         {item.discount > 0 && <span className="line-through text-beige ml-[8px]">${item.price}</span>}
                       </BodySm>
 
-                      <div className="flex flex-row justify-start items-center gap-0 border border-dashed border-beige rounded-none">
-                        <button
-                          type="button"
-                          onClick={() => setQty(item.slug, item.qty - 1)}
-                          aria-label={`Decrease quantity of ${item.title}`}
-                          className="flex items-center justify-center w-[32px] h-[32px] rounded-none bg-transparent border-none cursor-pointer text-brown"
-                        >
-                          <Minus size={14} strokeWidth={1.5} />
-                        </button>
-                        <span className="font-clash font-medium text-[14px] text-black w-[32px] text-center">{item.qty}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQty(item.slug, item.qty + 1)}
-                          aria-label={`Increase quantity of ${item.title}`}
-                          className="flex items-center justify-center w-[32px] h-[32px] rounded-none bg-transparent border-none cursor-pointer text-brown"
-                        >
-                          <Plus size={14} strokeWidth={1.5} />
-                        </button>
-                      </div>
+                      <QtyStepper
+                        qty={item.qty}
+                        onChange={(next) => setQty(item.slug, next)}
+                        label={item.title}
+                      />
 
                     </div>
                   </div>
