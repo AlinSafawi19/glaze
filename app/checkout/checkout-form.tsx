@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { CircleCheck } from "lucide-react";
 import Link from "next/link";
 import { H2, H4, SubtitleMd, BodySm, ItalicBodyLg } from "@/components/ui/typography";
 import { OutlineButton, Button, type ButtonState } from "@/components/ui/button";
@@ -89,12 +88,6 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
       <main>
         <section className="w-full flex flex-col justify-start items-center gap-[10px] p-0 rounded-none bg-caledon">
           <div className="w-full max-w-[800px] flex flex-col justify-center items-center gap-[24px] py-[80px] px-[16px] tablet:py-[120px]">
-            <CircleCheck
-              strokeWidth={1.25}
-              fill="none"
-              aria-hidden
-              className="text-plum w-[56px] h-[56px] tablet:w-[64px] tablet:h-[64px]"
-            />
             <H2 className="w-full !text-black !text-center">ORDER PLACED</H2>
             {/* Only a signed-in shopper has an address on file, so only they are
                 sent anything — promising a guest an email they will never get is

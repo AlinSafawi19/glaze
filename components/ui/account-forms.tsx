@@ -330,13 +330,6 @@ export function VerifyForm({ email, next }: { email: string; next?: string }) {
         )}
         {resent.error && <Reason>{resent.error}</Reason>}
       </form>
-
-      <div className="w-full flex flex-col justify-center items-center gap-[12px]">
-        <BodyMd className="w-full !text-brown !text-center">Wrong address?</BodyMd>
-        <Link href="/account/sign-up">
-          <OutlineButton icon={null}>Start again</OutlineButton>
-        </Link>
-      </div>
     </Card>
   );
 }
