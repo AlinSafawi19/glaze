@@ -164,7 +164,15 @@ export interface CheckoutState {
  */
 export async function placeOrder(
   lines: Array<{ slug: string; qty: number }>,
-  details: { name: string; phone: string; address: string; city: string; notes: string }
+  details: {
+    name: string;
+    /** Guests only — a signed-in shopper's account address is used instead. */
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    notes: string;
+  }
 ): Promise<CheckoutState> {
   if (lines.length === 0) return { error: "Your cart is empty." };
 
@@ -180,6 +188,9 @@ export async function placeOrder(
     cache: "no-store",
     body: JSON.stringify({
       Name: details.name,
+      // Omitted rather than sent empty: the backend rejects "" as a malformed
+      // address, and falls back to the account's own when the field is absent.
+      ...(details.email.trim() ? { Email: details.email.trim() } : {}),
       Phone: details.phone,
       Address: details.address,
       City: details.city,

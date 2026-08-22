@@ -28,6 +28,7 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
   const { products, loading }   = useProducts();
 
   const [name,    setName]    = useState(identity.name);
+  const [email,   setEmail]   = useState("");
   const [phone,   setPhone]   = useState(identity.phone);
   const [address, setAddress] = useState(identity.address);
   const [city,    setCity]    = useState(identity.city);
@@ -45,7 +46,14 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
 
   const subtotal = items.reduce((sum, i) => sum + i.finalPrice * i.qty, 0);
   const settled  = ready && !loading;
-  const incomplete = !name.trim() || !phone.trim() || !address.trim() || !city.trim();
+  const incomplete =
+    !name.trim() ||
+    !phone.trim() ||
+    !address.trim() ||
+    !city.trim() ||
+    // A guest leaves no account behind, so this is the only address the
+    // confirmation can go to.
+    (!identity.signedIn && !email.trim());
 
   // The page loader covers the wait — both the catalogue and reading the saved
   // lines back out of storage.
@@ -70,7 +78,7 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
     // the API key never reaches the browser.
     const result = await placeOrder(
       items.map((i) => ({ slug: i.slug, qty: i.qty })),
-      { name, phone, address, city, notes }
+      { name, email, phone, address, city, notes }
     );
 
     if (result.error) {
@@ -89,13 +97,8 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
         <section className="w-full flex flex-col justify-start items-center gap-[10px] p-0 rounded-none bg-caledon">
           <div className="w-full max-w-[800px] flex flex-col justify-center items-center gap-[24px] py-[80px] px-[16px] tablet:py-[120px]">
             <H2 className="w-full !text-black !text-center">ORDER PLACED</H2>
-            {/* Only a signed-in shopper has an address on file, so only they are
-                sent anything — promising a guest an email they will never get is
-                worse than saying nothing. */}
             <ItalicBodyLg className="w-full !text-brown !text-center [text-wrap:balance]">
-              {identity.signedIn
-                ? "A confirmation email is on its way, with everything you ordered."
-                : "Your order is with us and we are getting it ready."}
+              A confirmation email is on its way, with everything you ordered.
             </ItalicBodyLg>
             <Link href="/shop-all">
               <OutlineButton>Keep shopping</OutlineButton>
@@ -154,6 +157,27 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
                     <SubtitleMd className="w-full !text-brown !text-left">Full name</SubtitleMd>
                     <input className={FIELD_CLS} value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Smith" required />
                   </div>
+
+                  {/* Signed-in shoppers already have an address on file, and
+                      the backend falls back to it — so this is asked of guests
+                      only, rather than asking everyone for something we hold. */}
+                  {!identity.signedIn && (
+                    <div className="w-full flex flex-col gap-[10px]">
+                      <SubtitleMd className="w-full !text-brown !text-left">Email</SubtitleMd>
+                      <input
+                        className={FIELD_CLS}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="jane@example.com"
+                        type="email"
+                        autoComplete="email"
+                        required
+                      />
+                      <BodySm className="w-full !text-brown !text-left">
+                        Where we send your order confirmation.
+                      </BodySm>
+                    </div>
+                  )}
 
                   <div className="w-full flex flex-col gap-[10px]">
                     <SubtitleMd className="w-full !text-brown !text-left">Phone</SubtitleMd>
