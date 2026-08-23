@@ -8,6 +8,7 @@ import { QtyStepper } from "@/components/ui/qty-stepper";
 import { useCart } from "@/components/ui/use-cart";
 import { useProducts } from "@/components/ui/use-products";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { SectionLoading } from "@/components/ui/section-loading";
 import { ProductImage } from "@/components/ui/product-image";
 import { maxOrderable } from "@/lib/stock";
 
@@ -48,6 +49,8 @@ export default function Cart() {
           gap-[32px] py-[48px] px-[16px]
           tablet:gap-[40px] tablet:py-[64px] tablet:px-[24px]
           desktop:gap-[48px] desktop:py-[80px] desktop:px-[32px]">
+
+          {!settled && <SectionLoading />}
 
           {settled && items.length > 0 && (
             <div className="w-full flex flex-col justify-start items-start gap-[4px] p-0 rounded-none">

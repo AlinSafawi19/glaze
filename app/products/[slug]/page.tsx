@@ -12,6 +12,7 @@ import { ProductCard } from "@/components/ui/product-card";
 import { WishlistDetailButton } from "@/components/ui/wishlist-button";
 import { useCart } from "@/components/ui/use-cart";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { SectionLoading } from "@/components/ui/section-loading";
 import { ProductImage } from "@/components/ui/product-image";
 import { categorySlugs, relationSlug, type Relation, type RawRelations } from "@/lib/relations";
 import { isSoldOut, lowStockNote, parseStock } from "@/lib/stock";
@@ -138,10 +139,10 @@ export default function ProductPage() {
 
   useEffect(() => { setActiveImage(0); }, [slug]);
 
-  // The page loader stays up until the catalogue lands, so there is nothing to
-  // render in the meantime.
+  // On the first open the page loader covers this; on a navigation into the
+  // product the section holds the height while the catalogue lands.
   useLoadingGate(loading);
-  if (loading) return null;
+  if (loading) return <main><SectionLoading className="min-h-screen bg-caledon" /></main>;
 
   const product = products.find((p) => p.slug === slug);
   const related = products.filter((p) => p.slug !== slug).slice(0, 4);

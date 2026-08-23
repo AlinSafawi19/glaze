@@ -7,6 +7,7 @@ import { ProductCard } from "@/components/ui/product-card";
 import { OutlineButton } from "@/components/ui/button";
 import { useWishlist } from "@/components/ui/use-wishlist";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { SectionLoading } from "@/components/ui/section-loading";
 
 const PRODUCTS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products?limit=100`;
 const API_HEADERS  = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
@@ -75,6 +76,8 @@ export default function Wishlist() {
           desktop:gap-[48px] desktop:py-[80px] desktop:px-[32px]">
 
           {/* Title — the empty state carries its own heading, so this only shows with saves */}
+          {!settled && <SectionLoading />}
+
           {settled && saved.length > 0 && (
             <div className="w-full flex flex-col justify-start items-start gap-[4px] p-0 rounded-none">
               <H2 className="w-full !text-black !text-left">WISHLIST</H2>

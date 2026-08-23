@@ -10,6 +10,7 @@ import { ProductImage } from "@/components/ui/product-image";
 import { maxOrderable } from "@/lib/stock";
 import { placeOrder } from "@/lib/actions/account";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { SectionLoading } from "@/components/ui/section-loading";
 
 const FIELD_CLS =
   "w-full h-[48px] bg-transparent outline-none border-0 border-b border-beige px-0 pt-0 pb-[8px] " +
@@ -124,6 +125,8 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
           gap-[32px] py-[48px] px-[16px]
           tablet:gap-[40px] tablet:py-[64px] tablet:px-[24px]
           desktop:gap-[48px] desktop:py-[80px] desktop:px-[32px]">
+
+          {!settled && <SectionLoading />}
 
           {settled && (
             <div className="w-full flex flex-col justify-start items-start gap-[4px] p-0 rounded-none">

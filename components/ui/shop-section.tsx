@@ -9,6 +9,7 @@ import { BrandIndex } from "./brand-index";
 import { ProductCard } from "./product-card";
 import { H4, SubtitleMd } from "./typography";
 import { useLoadingGate, whenImagesSettled } from "./loading-gate";
+import { SectionLoading } from "./section-loading";
 
 const CATEGORIES_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/categories`;
 const BRANDS_URL     = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/brands`;
@@ -358,7 +359,7 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
           {/* Products area */}
           <div className="flex-1 flex flex-col gap-[40px] w-full">
 
-            {loading ? null : filtered.length === 0 ? (
+            {loading ? <SectionLoading /> : filtered.length === 0 ? (
               <EmptyState />
             ) : (
               <div className="grid
