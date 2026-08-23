@@ -21,9 +21,9 @@ const DATE = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
 });
 
-/** Delivered reads as settled, cancelled as struck — everything else is in flight. */
+/** Shipped reads as settled, cancelled as struck — everything else is in flight. */
 function statusTone(status: string): string {
-  if (status === "Delivered") return "bg-blush";
+  if (status === "Shipped") return "bg-blush";
   if (status === "Cancelled") return "bg-dusty";
   return "bg-berry";
 }

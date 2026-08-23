@@ -10,7 +10,7 @@ import { TickerBar } from "@/components/ui/ticker-bar";
 import Link from "next/link";
 import { OutlineButton } from "@/components/ui/button";
 import { ProductCard } from "@/components/ui/product-card";
-import { OffersSection } from "@/components/ui/offers-section";
+import { BundlesSection, OffersSection } from "@/components/ui/collection-strip";
 import { useLoadingGate } from "@/components/ui/loading-gate";
 
 const EASE = [0.44, 0, 0.56, 1] as const;
@@ -191,6 +191,13 @@ export default function Home() {
         ))}
 
       </section>
+
+      {/* ── Bundles ── */}
+      {/* Deliberately not next to Offers: the two are the same strip with
+          different copy, and stacked they read as one long band with a heading
+          dropped into the middle. The Categories band between them is what
+          makes each land as its own thing. */}
+      <BundlesSection />
 
       {/* â”€â”€ Featured â”€â”€ */}
       {/* Hidden outright when there is nothing featured. */}
