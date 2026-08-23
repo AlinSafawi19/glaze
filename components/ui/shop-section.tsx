@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { categorySlugs, relationSlug, skinTypeSlugs, type Relation, type RawRelations } from "@/lib/relations";
 import { Filters, type FilterItem } from "./filters";
 import { BrandIndex } from "./brand-index";
 import { ProductCard } from "./product-card";
@@ -15,36 +16,15 @@ const SKIN_TYPES_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/s
 const PRODUCTS_URL   = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products`;
 const API_HEADERS    = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
 
-/**
- * Relation fields come back either expanded into an object or as a bare slug
- * string, depending on the entry — normalise both down to a slug.
- */
-type Relation = string | { Slug?: string } | null | undefined;
-
-function relationSlug(value: Relation): string {
-  if (!value) return "";
-  return typeof value === "string" ? value : value.Slug ?? "";
-}
-
-/** Skin type reads as a list so a product can suit Dry *and* Sensitive, whether
- *  the dashboard field ends up single- or multi-valued. */
-function relationSlugs(value: Relation | Relation[]): string[] {
-  if (Array.isArray(value)) return value.map(relationSlug).filter(Boolean);
-  const slug = relationSlug(value);
-  return slug ? [slug] : [];
-}
-
-interface RawProduct {
+interface RawProduct extends RawRelations {
   id:              string;
   Slug:            string;
   Title:           string;
   "Cover img 1":   string;
   Price:           string;
   Discount:        string;
-  Category:        Relation;
   Brand:           Relation;
   Collections:     Relation;
-  "Skin Type":     Relation | Relation[];
 }
 
 interface Product {
@@ -54,7 +34,8 @@ interface Product {
   price:       number;
   discount:    number;
   imageSrc:    string;
-  category:    string;
+  /** A product can be filed under several headings at once. */
+  categories:  string[];
   brand:       string;
   collections: string;
   skinTypes:   string[];
@@ -88,10 +69,10 @@ async function fetchProducts(url: string): Promise<Product[]> {
     price:       parseFloat(e.Price)        || 0,
     discount:    parseFloat(e.Discount)     || 0,
     imageSrc:    e["Cover img 1"],
-    category:    relationSlug(e.Category),
+    categories:  categorySlugs(e),
     brand:       relationSlug(e.Brand),
     collections: relationSlug(e.Collections),
-    skinTypes:   relationSlugs(e["Skin Type"]),
+    skinTypes:   skinTypeSlugs(e),
   }));
 }
 
@@ -254,8 +235,9 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
       if (collectionSlug && p.collections !== collectionSlug) return false;
       if (q && !p.title.toLowerCase().includes(q)) return false;
       if (selectedCategories.size > 0) {
-        const catId = categorySlugToId[p.category];
-        if (!catId || !selectedCategories.has(catId)) return false;
+        // A product qualifies on any one of the categories it is filed under.
+        const ids = p.categories.map((c) => categorySlugToId[c]).filter(Boolean);
+        if (!ids.some((id) => selectedCategories.has(id))) return false;
       }
       if (selectedBrands.size > 0) {
         const brandId = brandSlugToId[p.brand];

@@ -28,11 +28,15 @@ function load(): Promise<Brand[]> {
     cache = fetch(BRANDS_URL, { headers: API_HEADERS })
       .then((r) => r.json())
       .then((data) =>
-        (data?.data ?? []).map((e: RawBrand) => ({
-          id:   e.id,
-          name: e.Title,
-          slug: e.Slug,
-        }))
+        (data?.data ?? [])
+          .map((e: RawBrand) => ({
+            id:   e.id,
+            name: e.Title,
+            slug: e.Slug,
+          }))
+          // The menu is an A–Z list, so it is sorted here rather than trusting
+          // the order the dashboard happened to return.
+          .sort((a: Brand, b: Brand) => a.name.localeCompare(b.name))
       )
       .catch(() => {
         cache = null; // let the next mount try again

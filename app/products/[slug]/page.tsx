@@ -12,20 +12,10 @@ import { ProductCard } from "@/components/ui/product-card";
 import { WishlistDetailButton } from "@/components/ui/wishlist-button";
 import { useCart } from "@/components/ui/use-cart";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { categorySlugs, relationSlug, type Relation, type RawRelations } from "@/lib/relations";
 
 const PRODUCTS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products`;
 const API_HEADERS  = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
-
-/**
- * A relation field arrives either expanded into an object or as a bare slug
- * string, depending on the entry — normalise both down to a slug.
- */
-type Relation = string | { Slug?: string } | null | undefined;
-
-function relationSlug(value: Relation): string {
-  if (!value) return "";
-  return typeof value === "string" ? value : value.Slug ?? "";
-}
 
 interface Product {
   id:              string;
@@ -37,7 +27,8 @@ interface Product {
   img_2:           string;
   img_3:           string;
   img_4:           string;
-  category:        string;
+  /** A product can be filed under several headings at once. */
+  categories:      string[];
   brand:           string;
   size:            string;
   sku:             number;
@@ -47,7 +38,7 @@ interface Product {
   collections:     string;
 }
 
-interface RawEntry {
+interface RawEntry extends RawRelations {
   id:              string;
   Slug:            string;
   Title:           string;
@@ -57,7 +48,6 @@ interface RawEntry {
   "Img 2":         string;
   "Img 3":         string;
   "Img 4":         string;
-  Category:        Relation;
   Brand:           Relation;
   Size:            string;
   SKU:             string;
@@ -126,7 +116,7 @@ export default function ProductPage() {
             img_2:           e["Img 2"]             ?? "",
             img_3:           e["Img 3"]             ?? "",
             img_4:           e["Img 4"]             ?? "",
-            category:        relationSlug(e.Category),
+            categories:      categorySlugs(e),
             brand:           relationSlug(e.Brand),
             size:            e.Size                 ?? "",
             sku:             parseInt(e.SKU)        || 0,
@@ -166,7 +156,9 @@ export default function ProductPage() {
     ? (product.price * (1 - product.discount / 100)).toFixed(0)
     : null;
   const brandLabel      = product.brand.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  const categoryLabel   = product.category.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const categoryLabel   = product.categories
+    .map((c) => c.replace(/-/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()))
+    .join(", ");
 
   return (
     <main>
