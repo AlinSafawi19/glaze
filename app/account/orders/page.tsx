@@ -33,7 +33,7 @@ function OrderCard({ order }: { order: CustomerOrder }) {
     <article className="w-full flex flex-col gap-[24px] bg-white p-[24px] tablet:p-[32px] rounded-none">
       <div className="w-full flex flex-wrap justify-between items-start gap-[16px] pb-[16px] border-b border-dashed border-beige">
         <div className="flex flex-col gap-[4px]">
-          <H4 className="!text-black !text-left">Order #{order.Number}</H4>
+          <H4 className="!text-black !text-left">Order {order.Reference}</H4>
           <ItalicBodySm className="!text-brown !text-left">
             {DATE.format(new Date(order.Placed))} · {order.Payment}
           </ItalicBodySm>

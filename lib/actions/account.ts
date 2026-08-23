@@ -154,7 +154,7 @@ export async function saveProfile(
 
 export interface CheckoutState {
   error?: string;
-  orderNumber?: number;
+  orderReference?: string;
 }
 
 /**
@@ -208,5 +208,6 @@ export async function placeOrder(
   }
 
   revalidatePath("/account/orders");
-  return { orderNumber: Number(data?.data?.Number) || undefined };
+  const reference = data?.data?.Reference;
+  return { orderReference: typeof reference === "string" ? reference : undefined };
 }

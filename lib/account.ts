@@ -36,7 +36,7 @@ export interface OrderItem {
 
 export interface CustomerOrder {
   id: string;
-  Number: number;
+  Reference: string;
   Status: string;
   Total: string;
   Placed: string;
