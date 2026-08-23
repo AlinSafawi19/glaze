@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { H2, H4, SubtitleMd, BodySm, ItalicBodyLg } from "@/components/ui/typography";
 import { OutlineButton, Button, type ButtonState } from "@/components/ui/button";
 import { useCart } from "@/components/ui/use-cart";
 import { useProducts } from "@/components/ui/use-products";
+import { ProductImage } from "@/components/ui/product-image";
 import { maxOrderable } from "@/lib/stock";
 import { placeOrder } from "@/lib/actions/account";
 import { useLoadingGate } from "@/components/ui/loading-gate";
@@ -254,7 +254,7 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
                   {items.map((item) => (
                     <div key={item.slug} className="w-full flex flex-row justify-start items-center gap-[12px]">
                       <div className="relative w-[56px] h-[70px] shrink-0 overflow-clip rounded-none">
-                        <Image src={item.imageSrc} alt="" fill sizes="56px" quality={100} unoptimized className="object-cover object-center" />
+                        <ProductImage src={item.imageSrc} sizes="56px" compact />
                       </div>
                       <div className="flex-1 min-w-0 flex flex-col gap-[2px]">
                         <BodySm className="!text-black !text-left">{item.title}</BodySm>

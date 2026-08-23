@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { X } from "lucide-react";
 import { H2, H4, SubtitleMd, BodySm, ItalicBodyLg } from "@/components/ui/typography";
@@ -9,6 +8,7 @@ import { QtyStepper } from "@/components/ui/qty-stepper";
 import { useCart } from "@/components/ui/use-cart";
 import { useProducts } from "@/components/ui/use-products";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { ProductImage } from "@/components/ui/product-image";
 import { maxOrderable } from "@/lib/stock";
 
 export default function Cart() {
@@ -82,15 +82,7 @@ export default function Cart() {
                   >
 
                     <Link href={`/products/${item.slug}`} className="relative w-[80px] h-[100px] tablet:w-[100px] tablet:h-[125px] shrink-0 overflow-clip rounded-none">
-                      <Image
-                        src={item.imageSrc}
-                        alt=""
-                        fill
-                        sizes="100px"
-                        quality={100}
-                        unoptimized
-                        className="object-cover object-center"
-                      />
+                      <ProductImage src={item.imageSrc} sizes="100px" compact />
                     </Link>
 
                     <div className="flex-1 flex flex-col justify-start items-start gap-[8px] min-w-0">

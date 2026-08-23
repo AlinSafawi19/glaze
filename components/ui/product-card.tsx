@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useState } from "react";
 import { SubtitleMd, SubtitleSm } from "./typography";
+import { ProductImage } from "./product-image";
 import { DiscoverCursor } from "./discover-cursor";
 import { WishlistButton } from "./wishlist-button";
 import { useCart } from "./use-cart";
@@ -28,7 +28,7 @@ export function ProductCard({
   title     = "Oak Cinnamon",
   price     = 260,
   discount  = 50,
-  imageSrc  = "https://framerusercontent.com/images/eJz6nSHKQGwj2a2fxzK5jYek.png",
+  imageSrc  = "",
   imageAlt  = "",
   href      = "#",
   className = "",
@@ -75,13 +75,10 @@ export function ProductCard({
           className="relative w-full h-full"
           style={{ transform: cursorVisible ? "scale(1.05)" : "scale(1)", transition: `transform 0.4s ${EASE}` }}
         >
-          <Image
+          <ProductImage
             src={imageSrc}
             alt={imageAlt}
-            fill
             sizes="320px"
-            quality={100}
-            unoptimized
             className={`object-cover ${soldOut ? "opacity-45 grayscale" : ""}`}
           />
         </div>

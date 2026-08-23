@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -11,6 +10,7 @@ import { OutlineButton, FilledButton } from "./button";
 import { QtyStepper } from "./qty-stepper";
 import { useCart, useCartDrawer } from "./use-cart";
 import { useProducts } from "./use-products";
+import { ProductImage } from "./product-image";
 import { maxOrderable } from "@/lib/stock";
 import { useScrollLock } from "./use-scroll-lock";
 
@@ -106,7 +106,7 @@ export function CartDrawer() {
                       onClick={() => setOpen(false)}
                       className="relative w-[64px] h-[80px] shrink-0 overflow-clip rounded-none"
                     >
-                      <Image src={item.imageSrc} alt="" fill sizes="64px" quality={100} unoptimized className="object-cover object-center" />
+                      <ProductImage src={item.imageSrc} sizes="64px" compact />
                     </Link>
 
                     <div className="flex-1 min-w-0 flex flex-col gap-[6px]">

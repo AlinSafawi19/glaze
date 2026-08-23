@@ -12,6 +12,7 @@ import { ProductCard } from "@/components/ui/product-card";
 import { WishlistDetailButton } from "@/components/ui/wishlist-button";
 import { useCart } from "@/components/ui/use-cart";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { ProductImage } from "@/components/ui/product-image";
 import { categorySlugs, relationSlug, type Relation, type RawRelations } from "@/lib/relations";
 import { isSoldOut, lowStockNote, parseStock } from "@/lib/stock";
 
@@ -180,14 +181,10 @@ export default function ProductPage() {
 
             {/* img 1 — full height banner */}
             <div className="relative w-full h-[400px] tablet:h-[50vh] desktop:h-screen overflow-visible rounded-none">
-              <Image
+              <ProductImage
                 src={product.cover_img_1}
                 alt={product.title}
-                fill
                 sizes="(max-width: 1199px) 100vw, 55vw"
-                quality={100}
-                unoptimized
-                className="object-cover object-center"
               />
             </div>
 
