@@ -12,6 +12,7 @@ import { OutlineButton } from "@/components/ui/button";
 import { ProductCard } from "@/components/ui/product-card";
 import { BundlesSection, OffersSection } from "@/components/ui/collection-strip";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { parseStock } from "@/lib/stock";
 
 const EASE = [0.44, 0, 0.56, 1] as const;
 
@@ -25,6 +26,7 @@ interface FeaturedProduct {
   price:    number;
   discount: number;
   imageSrc: string;
+  stock:    number | null;
 }
 
 interface RawFeaturedEntry {
@@ -34,6 +36,7 @@ interface RawFeaturedEntry {
   "Cover img 1": string;
   Price:         string;
   Discount:      string;
+  Stock?:        string;
 }
 
 function useFeaturedProducts(limit: number) {
@@ -53,6 +56,7 @@ function useFeaturedProducts(limit: number) {
             price:    parseFloat(e.Price)        || 0,
             discount: parseFloat(e.Discount)     || 0,
             imageSrc: e["Cover img 1"],
+            stock:    parseStock(e.Stock),
           }))
         );
       })
@@ -231,6 +235,7 @@ export default function Home() {
                   discount={product.discount}
                   imageSrc={product.imageSrc}
                   slug={product.slug}
+                  stock={product.stock}
                   href={`/products/${product.slug}`}
                   className="!w-full"
                 />

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { categorySlugs, relationSlug, skinTypeSlugs, type Relation, type RawRelations } from "@/lib/relations";
+import { parseStock } from "@/lib/stock";
 import { Filters, type FilterItem } from "./filters";
 import { BrandIndex } from "./brand-index";
 import { ProductCard } from "./product-card";
@@ -25,6 +26,7 @@ interface RawProduct extends RawRelations {
   Discount:        string;
   Brand:           Relation;
   Collections:     Relation;
+  Stock?:          string;
 }
 
 interface Product {
@@ -34,6 +36,7 @@ interface Product {
   price:       number;
   discount:    number;
   imageSrc:    string;
+  stock:       number | null;
   /** A product can be filed under several headings at once. */
   categories:  string[];
   brand:       string;
@@ -69,6 +72,7 @@ async function fetchProducts(url: string): Promise<Product[]> {
     price:       parseFloat(e.Price)        || 0,
     discount:    parseFloat(e.Discount)     || 0,
     imageSrc:    e["Cover img 1"],
+    stock:       parseStock(e.Stock),
     categories:  categorySlugs(e),
     brand:       relationSlug(e.Brand),
     collections: relationSlug(e.Collections),
@@ -369,6 +373,7 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
                     discount={product.discount}
                     imageSrc={product.imageSrc}
                     slug={product.slug}
+                    stock={product.stock}
                     href={`/products/${product.slug}`}
                     className="!w-full"
                   />

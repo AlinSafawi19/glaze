@@ -11,6 +11,7 @@ import { OutlineButton, FilledButton } from "./button";
 import { QtyStepper } from "./qty-stepper";
 import { useCart, useCartDrawer } from "./use-cart";
 import { useProducts } from "./use-products";
+import { maxOrderable } from "@/lib/stock";
 import { useScrollLock } from "./use-scroll-lock";
 
 // Long, low-bounce ease so the panel glides rather than snaps.
@@ -38,11 +39,14 @@ export function CartDrawer() {
   const items = lines
     .map((line) => {
       const product = products.find((p) => p.slug === line.slug);
-      return product ? { ...product, qty: line.qty } : null;
+      if (!product) return null;
+      const available = maxOrderable(product.stock);
+      return { ...product, qty: line.qty, available, short: line.qty > available };
     })
     .filter((i): i is NonNullable<typeof i> => Boolean(i));
 
   const subtotal = items.reduce((sum, i) => sum + i.finalPrice * i.qty, 0);
+  const blocked  = items.filter((i) => i.short);
 
   return (
     <AnimatePresence>
@@ -127,7 +131,14 @@ export function CartDrawer() {
                         onChange={(next) => setQty(item.slug, next)}
                         label={item.title}
                         size="sm"
+                        max={item.available}
                       />
+
+                      {item.short && (
+                        <BodySm className="!text-plum !text-left">
+                          {item.available === 0 ? "Out of stock" : `Only ${item.available} left`}
+                        </BodySm>
+                      )}
                     </div>
                   </div>
                 ))
@@ -142,10 +153,25 @@ export function CartDrawer() {
                   <SubtitleMd className="!text-black !text-right">${subtotal}</SubtitleMd>
                 </div>
                 <BodySm className="w-full !text-brown !text-left">Cash on delivery</BodySm>
+                {blocked.length > 0 && (
+                  <BodySm className="w-full !text-plum !text-left [text-wrap:balance]">
+                    Some items are no longer available in the quantity saved — open the cart to
+                    adjust them.
+                  </BodySm>
+                )}
                 <div className="w-full flex flex-col gap-[8px]">
-                  <Link href="/checkout" onClick={() => setOpen(false)} className="w-full">
-                    <FilledButton className="w-full">Checkout</FilledButton>
-                  </Link>
+                  {blocked.length > 0 ? (
+                    <FilledButton
+                      className="w-full disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled
+                    >
+                      Checkout
+                    </FilledButton>
+                  ) : (
+                    <Link href="/checkout" onClick={() => setOpen(false)} className="w-full">
+                      <FilledButton className="w-full">Checkout</FilledButton>
+                    </Link>
+                  )}
                   <Link href="/cart" onClick={() => setOpen(false)} className="w-full">
                     <OutlineButton className="w-full">View cart</OutlineButton>
                   </Link>

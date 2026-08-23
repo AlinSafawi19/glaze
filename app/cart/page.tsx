@@ -9,6 +9,7 @@ import { QtyStepper } from "@/components/ui/qty-stepper";
 import { useCart } from "@/components/ui/use-cart";
 import { useProducts } from "@/components/ui/use-products";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { maxOrderable } from "@/lib/stock";
 
 export default function Cart() {
   const { lines, ready, setQty, remove } = useCart();
@@ -17,12 +18,23 @@ export default function Cart() {
   const items = lines
     .map((line) => {
       const product = products.find((p) => p.slug === line.slug);
-      return product ? { ...product, qty: line.qty } : null;
+      if (!product) return null;
+      // A basket can outlive the stock behind it: these were put here before
+      // somebody else bought the last one, so the line stays and says so
+      // rather than being silently trimmed under the shopper.
+      const available = maxOrderable(product.stock);
+      return {
+        ...product,
+        qty: line.qty,
+        available,
+        short: line.qty > available,
+      };
     })
     .filter((i): i is NonNullable<typeof i> => Boolean(i));
 
   const subtotal = items.reduce((sum, i) => sum + i.finalPrice * i.qty, 0);
   const settled  = ready && !loading;
+  const blocked  = items.filter((i) => i.short);
 
   // The page loader covers the wait — both the catalogue and reading the saved
   // lines back out of storage.
@@ -106,7 +118,22 @@ export default function Cart() {
                         qty={item.qty}
                         onChange={(next) => setQty(item.slug, next)}
                         label={item.title}
+                        max={item.available}
                       />
+
+                      {item.short && (
+                        <button
+                          type="button"
+                          onClick={() => setQty(item.slug, item.available)}
+                          className="text-left bg-transparent border-none p-0 cursor-pointer"
+                        >
+                          <BodySm className="!text-plum !text-left">
+                            {item.available === 0
+                              ? "Out of stock — remove it to check out"
+                              : `Only ${item.available} left — tap to reduce`}
+                          </BodySm>
+                        </button>
+                      )}
 
                     </div>
                   </div>
@@ -140,10 +167,31 @@ export default function Cart() {
                   </BodySm>
                 </div>
 
+                {blocked.length > 0 && (
+                  <div className="w-full bg-blush px-[16px] py-[12px] rounded-none">
+                    <BodySm className="!text-plum !text-left [text-wrap:balance]">
+                      {blocked.length === 1
+                        ? `${blocked[0].title} is no longer available in that quantity. Adjust it to carry on.`
+                        : "Some items are no longer available in the quantity saved. Adjust them to carry on."}
+                    </BodySm>
+                  </div>
+                )}
+
                 <div className="w-full flex flex-col justify-start items-start gap-[12px]">
-                  <Link href="/checkout" className="w-full">
-                    <FilledButton className="w-full">Checkout</FilledButton>
-                  </Link>
+                  {/* Not a link while a line cannot be filled: checkout would
+                      only be refused by the server, one page later. */}
+                  {blocked.length > 0 ? (
+                    <FilledButton
+                      className="w-full disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled
+                    >
+                      Checkout
+                    </FilledButton>
+                  ) : (
+                    <Link href="/checkout" className="w-full">
+                      <FilledButton className="w-full">Checkout</FilledButton>
+                    </Link>
+                  )}
                   <Link href="/shop-all" className="w-full">
                     <OutlineButton className="w-full">Continue shopping</OutlineButton>
                   </Link>

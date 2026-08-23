@@ -6,6 +6,7 @@ import { SubtitleMd, SubtitleSm } from "./typography";
 import { DiscoverCursor } from "./discover-cursor";
 import { WishlistButton } from "./wishlist-button";
 import { useCart } from "./use-cart";
+import { isSoldOut, lowStockNote } from "@/lib/stock";
 
 interface ProductCardProps {
   slug?: string;
@@ -16,6 +17,8 @@ interface ProductCardProps {
   imageAlt?: string;
   href?: string;
   className?: string;
+  /** Units left, or null when the shop does not track this product. */
+  stock?: number | null;
 }
 
 const EASE = "cubic-bezier(0.44, 0, 0.56, 1)";
@@ -29,7 +32,10 @@ export function ProductCard({
   imageAlt  = "",
   href      = "#",
   className = "",
+  stock     = null,
 }: ProductCardProps) {
+  const soldOut = isSoldOut(stock);
+  const lowNote = lowStockNote(stock);
   const [isDesktop, setIsDesktop] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [overCta,   setOverCta]   = useState(false);
@@ -76,9 +82,19 @@ export function ProductCard({
             sizes="320px"
             quality={100}
             unoptimized
-            className="object-cover"
+            className={`object-cover ${soldOut ? "opacity-45 grayscale" : ""}`}
           />
         </div>
+
+        {/* Sold out — top right, so it never lands on the discount badge. */}
+        {soldOut && (
+          <div
+            className="absolute top-[16px] right-[16px] flex flex-row justify-start items-center overflow-visible rounded-none z-[1] bg-black"
+            style={{ padding: "4px 12px" }}
+          >
+            <SubtitleSm className="!text-accent !text-left grow z-[1]">Out of stock</SubtitleSm>
+          </div>
+        )}
 
         {/* Discount Wrapper — hidden when discount === 0 */}
         {discount !== 0 && (
@@ -104,6 +120,10 @@ export function ProductCard({
           <SubtitleMd className="!text-black !text-left">{price}</SubtitleMd>
         </div>
 
+        {lowNote && (
+          <SubtitleSm className="w-full !text-plum !text-left">{lowNote}</SubtitleSm>
+        )}
+
         {/* Add to cart + wishlist */}
         {slug && (
           <div
@@ -111,16 +131,24 @@ export function ProductCard({
             onMouseEnter={() => setOverCta(true)}
             onMouseLeave={() => setOverCta(false)}
           >
+            {/* Still a button rather than a hidden control: the shopper needs
+                to see that the shop stocks this at all, and the wishlist beside
+                it is how they ask to be reminded. */}
             <button
               type="button"
+              disabled={soldOut}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                add(slug);
+                if (!soldOut) add(slug);
               }}
-              className="flex-1 font-clash font-medium clash-features uppercase text-brown text-[13px] leading-[1.4] border border-dotted border-beige px-[16px] py-[10px] rounded-none bg-transparent cursor-pointer transition-colors duration-300 hover:bg-blush hover:text-plum"
+              className={`flex-1 font-clash font-medium clash-features uppercase text-[13px] leading-[1.4] border border-dotted border-beige px-[16px] py-[10px] rounded-none bg-transparent transition-colors duration-300 ${
+                soldOut
+                  ? "text-beige cursor-not-allowed"
+                  : "text-brown cursor-pointer hover:bg-blush hover:text-plum"
+              }`}
             >
-              Add to cart
+              {soldOut ? "Out of stock" : "Add to cart"}
             </button>
 
             <WishlistButton

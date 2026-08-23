@@ -24,6 +24,7 @@ export function QtyStepper({
   onChange,
   label,
   size = "md",
+  max = MAX,
 }: {
   qty: number;
   /** Below 1 removes the line, matching what the minus button does at 1. */
@@ -31,10 +32,18 @@ export function QtyStepper({
   /** The product name, for the controls' accessible labels. */
   label: string;
   size?: keyof typeof SIZES;
+  /**
+   * Units available. Plus stops here and a typed number is clamped to it, so
+   * the cart cannot ask for stock the shop does not have. Left at the cart's
+   * own ceiling for products the shop does not count.
+   */
+  max?: number;
 }) {
   const [draft, setDraft] = useState(String(qty));
   const editing = useRef(false);
   const { button, field, icon } = SIZES[size];
+  // A line already over its stock still steps down; it just cannot step up.
+  const ceiling = Math.max(0, Math.min(max, MAX));
 
   // Follow the cart when the change came from anywhere else — the buttons, the
   // other view of the same cart, another tab — but never overwrite live typing.
@@ -54,7 +63,7 @@ export function QtyStepper({
       return;
     }
 
-    const clamped = Math.min(Math.max(next, 0), MAX);
+    const clamped = Math.min(Math.max(next, 0), Math.max(ceiling, 0));
     setDraft(String(clamped));
     if (clamped !== qty) onChange(clamped);
   }
@@ -104,8 +113,9 @@ export function QtyStepper({
       <button
         type="button"
         onClick={() => onChange(qty + 1)}
+        disabled={qty >= ceiling}
         aria-label={`Increase quantity of ${label}`}
-        className={`flex items-center justify-center ${button} rounded-none bg-transparent border-none cursor-pointer text-brown`}
+        className={`flex items-center justify-center ${button} rounded-none bg-transparent border-none text-brown enabled:cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed`}
       >
         <Plus size={icon} strokeWidth={1.5} />
       </button>

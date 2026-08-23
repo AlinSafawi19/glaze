@@ -7,6 +7,7 @@ import { OutlineButton } from "./button";
 import { ProductCard } from "./product-card";
 import { useLoadingGate } from "./loading-gate";
 import { relationSlug, type Relation } from "@/lib/relations";
+import { parseStock } from "@/lib/stock";
 
 const PRODUCTS_URL    = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products?limit=100`;
 const COLLECTIONS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/collections?limit=100`;
@@ -20,6 +21,7 @@ interface RawProduct {
   Price:         string;
   Discount:      string;
   Collections:   Relation;
+  Stock?:        string;
 }
 
 interface RawCollection {
@@ -34,6 +36,7 @@ interface StripProduct {
   price:      number;
   discount:   number;
   imageSrc:   string;
+  stock:      number | null;
   collection: string;
 }
 
@@ -63,6 +66,7 @@ function load(): Promise<Catalogue> {
           price:      parseFloat(e.Price)    || 0,
           discount:   parseFloat(e.Discount) || 0,
           imageSrc:   e["Cover img 1"],
+          stock:      parseStock(e.Stock),
           collection: relationSlug(e.Collections),
         })),
         collections: (collectionsData?.data ?? []) as RawCollection[],
@@ -170,6 +174,7 @@ export function CollectionStrip({
               price={p.price}
               discount={p.discount}
               imageSrc={p.imageSrc}
+              stock={p.stock}
               href={`/products/${p.slug}`}
               className="!w-full"
             />

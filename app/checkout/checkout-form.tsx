@@ -7,6 +7,7 @@ import { H2, H4, SubtitleMd, BodySm, ItalicBodyLg } from "@/components/ui/typogr
 import { OutlineButton, Button, type ButtonState } from "@/components/ui/button";
 import { useCart } from "@/components/ui/use-cart";
 import { useProducts } from "@/components/ui/use-products";
+import { maxOrderable } from "@/lib/stock";
 import { placeOrder } from "@/lib/actions/account";
 import { useLoadingGate } from "@/components/ui/loading-gate";
 
@@ -40,13 +41,19 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
   const items = lines
     .map((line) => {
       const product = products.find((p) => p.slug === line.slug);
-      return product ? { ...product, qty: line.qty } : null;
+      if (!product) return null;
+      const available = maxOrderable(product.stock);
+      return { ...product, qty: line.qty, available, short: line.qty > available };
     })
     .filter((i): i is NonNullable<typeof i> => Boolean(i));
 
   const subtotal = items.reduce((sum, i) => sum + i.finalPrice * i.qty, 0);
   const settled  = ready && !loading;
+  // The server checks this again and is the one that decides — this only saves
+  // the shopper filling in an address for an order that cannot be placed.
+  const blocked  = items.filter((i) => i.short);
   const incomplete =
+    blocked.length > 0 ||
     !name.trim() ||
     !phone.trim() ||
     !address.trim() ||
@@ -214,6 +221,20 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
                 </div>
 
                 <div className="w-full flex justify-center">
+                  {blocked.length > 0 && (
+                    <div className="w-full bg-blush px-[16px] py-[12px] rounded-none">
+                      <BodySm className="!text-plum !text-left [text-wrap:balance]">
+                        {blocked.length === 1
+                          ? `${blocked[0].title} is no longer available in that quantity.`
+                          : "Some items are no longer available in the quantity saved."}{" "}
+                        <Link href="/cart" className="underline">
+                          Adjust your cart
+                        </Link>{" "}
+                        to carry on.
+                      </BodySm>
+                    </div>
+                  )}
+
                   <Button type="submit" buttonState={state} disabled={incomplete} />
                 </div>
 

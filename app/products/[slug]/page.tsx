@@ -13,6 +13,7 @@ import { WishlistDetailButton } from "@/components/ui/wishlist-button";
 import { useCart } from "@/components/ui/use-cart";
 import { useLoadingGate } from "@/components/ui/loading-gate";
 import { categorySlugs, relationSlug, type Relation, type RawRelations } from "@/lib/relations";
+import { isSoldOut, lowStockNote, parseStock } from "@/lib/stock";
 
 const PRODUCTS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products`;
 const API_HEADERS  = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
@@ -32,6 +33,7 @@ interface Product {
   brand:           string;
   size:            string;
   sku:             number;
+  stock:           number | null;
   description:     string;
   key_ingredients: string;
   sales_type:      string;
@@ -51,6 +53,7 @@ interface RawEntry extends RawRelations {
   Brand:           Relation;
   Size:            string;
   SKU:             string;
+  Stock?:          string;
   Description:     string;
   "Key Ingredients": string;
   "Sales type":    string;
@@ -120,6 +123,7 @@ export default function ProductPage() {
             brand:           relationSlug(e.Brand),
             size:            e.Size                 ?? "",
             sku:             parseInt(e.SKU)        || 0,
+            stock:           parseStock(e.Stock),
             description:     e.Description          ?? "",
             key_ingredients: e["Key Ingredients"]   ?? "",
             sales_type:      e["Sales type"]        ?? "",
@@ -155,6 +159,8 @@ export default function ProductPage() {
   const finalPrice      = product.discount > 0
     ? (product.price * (1 - product.discount / 100)).toFixed(0)
     : null;
+  const soldOut         = isSoldOut(product.stock);
+  const lowNote         = lowStockNote(product.stock);
   const brandLabel      = product.brand.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   const categoryLabel   = product.categories
     .map((c) => c.replace(/-/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase()))
@@ -309,17 +315,34 @@ export default function ProductPage() {
               <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.description}</BodySm>
             </div>
 
+            {/* Stock — said before the button rather than only on it, so the
+                shopper reads why it is disabled rather than that it is. */}
+            {(soldOut || lowNote) && (
+              <div className="w-full flex flex-row flex-wrap justify-start items-baseline gap-[8px] p-0 rounded-none">
+                <SubtitleSm className="w-auto !text-plum !text-left">
+                  {soldOut ? "Out of stock" : lowNote}
+                </SubtitleSm>
+                {soldOut && (
+                  <BodySm className="w-auto !text-brown !text-left">
+                    Save it to your wishlist and it is waiting when it is back.
+                  </BodySm>
+                )}
+              </div>
+            )}
+
             {/* Add to cart × wishlist */}
             <div className="w-full flex flex-row justify-start items-stretch gap-[8px]">
               <FilledButton
-                className="flex-1"
+                className="flex-1 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={soldOut}
                 icon={<ShoppingBag size={16} strokeWidth={1.5} />}
                 onClick={() => {
+                  if (soldOut) return;
                   add(product.slug);
                   setAdded(true);
                 }}
               >
-                {added ? "Added to cart" : "Add to cart"}
+                {soldOut ? "Out of stock" : added ? "Added to cart" : "Add to cart"}
               </FilledButton>
               <WishlistDetailButton slug={product.slug} title={product.title} />
             </div>
@@ -406,6 +429,7 @@ export default function ProductPage() {
                 discount={p.discount}
                 imageSrc={p.cover_img_1}
                 slug={p.slug}
+                stock={p.stock}
                 href={`/products/${p.slug}`}
                 className="!w-full"
               />
