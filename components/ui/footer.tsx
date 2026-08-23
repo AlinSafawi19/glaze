@@ -7,7 +7,7 @@ import { FooterWordmark, WordmarkImage } from "./footer-wordmark";
 import { Logomark } from "./logomark";
 
 /** The address shoppers write to. Set NEXT_PUBLIC_STORE_EMAIL to change it. */
-const STORE_EMAIL = process.env.NEXT_PUBLIC_STORE_EMAIL || "hello@glazekorea.com";
+const STORE_EMAIL = process.env.NEXT_PUBLIC_STORE_EMAIL || "glaze.skin@outlook.com";
 
 /** The number shoppers call — dialled form for the link, spaced form for reading. */
 const STORE_PHONE = "+96179345700";
