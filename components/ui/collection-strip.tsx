@@ -7,11 +7,11 @@ import { OutlineButton } from "./button";
 import { ProductCard } from "./product-card";
 import { useLoadingGate } from "./loading-gate";
 import { relationSlug, type Relation } from "@/lib/relations";
+import { fetchAll, endpoint } from "@/lib/api";
 import { parseStock } from "@/lib/stock";
 
-const PRODUCTS_URL    = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products?limit=100`;
-const COLLECTIONS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/collections?limit=100`;
-const API_HEADERS     = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+const PRODUCTS_URL    = endpoint("products");
+const COLLECTIONS_URL = endpoint("collections");
 
 interface RawProduct {
   id:            string;
@@ -54,12 +54,15 @@ let cache: Promise<Catalogue> | null = null;
 
 function load(): Promise<Catalogue> {
   if (!cache) {
+    // Both lists are walked page by page: a strip picks its products by
+    // collection on the client, so a catalogue cut off at the endpoint's
+    // default page would leave later collections looking empty.
     cache = Promise.all([
-      fetch(PRODUCTS_URL,    { headers: API_HEADERS }).then((r) => r.json()),
-      fetch(COLLECTIONS_URL, { headers: API_HEADERS }).then((r) => r.json()),
+      fetchAll<RawProduct>(PRODUCTS_URL),
+      fetchAll<RawCollection>(COLLECTIONS_URL),
     ])
-      .then(([productsData, collectionsData]) => ({
-        products: ((productsData?.data ?? []) as RawProduct[]).map((e) => ({
+      .then(([productRows, collectionRows]) => ({
+        products: productRows.map((e) => ({
           id:         e.id,
           slug:       e.Slug,
           title:      e.Title,
@@ -69,7 +72,7 @@ function load(): Promise<Catalogue> {
           stock:      parseStock(e.Stock),
           collection: relationSlug(e.Collections),
         })),
-        collections: (collectionsData?.data ?? []) as RawCollection[],
+        collections: collectionRows,
       }))
       .catch(() => {
         cache = null; // let the next mount try again

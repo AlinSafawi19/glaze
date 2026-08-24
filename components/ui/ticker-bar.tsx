@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { H4 } from "./typography";
 import { Ticker } from "./ticker";
+import { fetchAll, endpoint } from "@/lib/api";
 import { useLoadingGate } from "./loading-gate";
 
-const TICKER_URL  = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/ticker?limit=100`;
-const API_HEADERS = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+const TICKER_URL = endpoint("ticker");
 
 interface RawTickerItem {
   id:    string;
@@ -23,10 +23,11 @@ function useTickerLines() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(TICKER_URL, { headers: API_HEADERS })
-      .then((r) => r.json())
-      .then((data) => {
-        const entries: RawTickerItem[] = data?.data ?? [];
+    const abort = new AbortController();
+
+    fetchAll<RawTickerItem>(TICKER_URL, { signal: abort.signal })
+      .then((entries) => {
+        if (abort.signal.aborted) return;
         setLines(
           entries
             .map((e) => ({ id: e.id, text: (e.Title ?? "").trim() }))
@@ -35,7 +36,9 @@ function useTickerLines() {
         );
       })
       .catch(() => setLines([]))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
+
+    return () => abort.abort();
   }, []);
 
   // Part of the home page proper, so it holds the page loader up.

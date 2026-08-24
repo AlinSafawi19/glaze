@@ -12,12 +12,12 @@ import { OutlineButton } from "@/components/ui/button";
 import { ProductCard } from "@/components/ui/product-card";
 import { BundlesSection, OffersSection } from "@/components/ui/collection-strip";
 import { useLoadingGate } from "@/components/ui/loading-gate";
+import { fetchPage, endpoint } from "@/lib/api";
 import { parseStock } from "@/lib/stock";
 
 const EASE = [0.44, 0, 0.56, 1] as const;
 
-const PRODUCTS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products`;
-const API_HEADERS  = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+const PRODUCTS_URL = endpoint("products");
 
 interface FeaturedProduct {
   id:       string;
@@ -44,12 +44,15 @@ function useFeaturedProducts(limit: number) {
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    fetch(PRODUCTS_URL, { headers: API_HEADERS })
-      .then((r) => r.json())
-      .then((data) => {
-        const entries: RawFeaturedEntry[] = data?.data ?? [];
+    const abort = new AbortController();
+
+    // A short strip on the home page — ask for exactly the rows it shows
+    // rather than pulling a page of the catalogue and throwing most away.
+    fetchPage<RawFeaturedEntry>(PRODUCTS_URL, { limit, signal: abort.signal })
+      .then(({ rows }) => {
+        if (abort.signal.aborted) return;
         setProducts(
-          entries.slice(0, limit).map((e) => ({
+          rows.slice(0, limit).map((e) => ({
             id:       e.id,
             slug:     e.Slug,
             title:    e.Title,

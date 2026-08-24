@@ -8,9 +8,9 @@ import { OutlineButton } from "@/components/ui/button";
 import { useWishlist } from "@/components/ui/use-wishlist";
 import { useLoadingGate } from "@/components/ui/loading-gate";
 import { SectionLoading } from "@/components/ui/section-loading";
+import { fetchAll, endpoint } from "@/lib/api";
 
-const PRODUCTS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products?limit=100`;
-const API_HEADERS  = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+const PRODUCTS_URL = endpoint("products");
 
 interface RawEntry {
   id:            string;
@@ -36,10 +36,13 @@ export default function Wishlist() {
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    fetch(PRODUCTS_URL, { headers: API_HEADERS })
-      .then((r) => r.json())
-      .then((data) => {
-        const entries: RawEntry[] = data?.data ?? [];
+    const abort = new AbortController();
+
+    // Saved slugs are resolved against this, so it has to be the whole
+    // catalogue and not whichever page the endpoint returns by default.
+    fetchAll<RawEntry>(PRODUCTS_URL, { signal: abort.signal })
+      .then((entries) => {
+        if (abort.signal.aborted) return;
         setProducts(
           entries.map((e) => ({
             id:       e.id,

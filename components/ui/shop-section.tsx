@@ -8,15 +8,15 @@ import { Filters, type FilterItem } from "./filters";
 import { BrandIndex } from "./brand-index";
 import { ProductCard } from "./product-card";
 import { H4, SubtitleMd } from "./typography";
+import { fetchAll, endpoint } from "@/lib/api";
 import { useLoadingGate, whenImagesSettled } from "./loading-gate";
 import { SectionLoading } from "./section-loading";
 
-const CATEGORIES_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/categories`;
-const BRANDS_URL     = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/brands`;
-const COLLECTIONS_URL= `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/collections`;
-const SKIN_TYPES_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/skin-types`;
-const PRODUCTS_URL   = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products`;
-const API_HEADERS    = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+const CATEGORIES_URL = endpoint("categories");
+const BRANDS_URL     = endpoint("brands");
+const COLLECTIONS_URL= endpoint("collections");
+const SKIN_TYPES_URL = endpoint("skin-types");
+const PRODUCTS_URL   = endpoint("products");
 
 interface RawProduct extends RawRelations {
   id:              string;
@@ -48,25 +48,18 @@ interface Product {
 const DESKTOP_PAGE_SIZE = 12;
 const MOBILE_PAGE_SIZE  = 8;
 
-/** A list the dashboard does not have yet just yields no filter — never a dead page. */
-async function fetchFilterItems(url: string): Promise<FilterItem[]> {
-  try {
-    const res  = await fetch(url, { headers: API_HEADERS });
-    const data = await res.json();
-    return (data?.data ?? []).map((e: { id: string; Title: string; Slug: string }) => ({
-      id:   e.id,
-      name: e.Title,
-      slug: e.Slug,
-    }));
-  } catch {
-    return [];
-  }
+/**
+ * A list the dashboard does not have yet just yields no filter — never a dead
+ * page. Every page is walked: the endpoint hands back 20 rows unasked, so a
+ * shop with more than twenty brands was quietly losing the rest.
+ */
+async function fetchFilterItems(url: string, signal?: AbortSignal): Promise<FilterItem[]> {
+  const rows = await fetchAll<{ id: string; Title: string; Slug: string }>(url, { signal });
+  return rows.map((e) => ({ id: e.id, name: e.Title, slug: e.Slug }));
 }
 
-async function fetchProducts(url: string): Promise<Product[]> {
-  const res  = await fetch(url, { headers: API_HEADERS });
-  const data = await res.json();
-  return (data?.data ?? []).map((e: RawProduct) => ({
+function toProduct(e: RawProduct): Product {
+  return {
     id:          e.id,
     slug:        e.Slug,
     title:       e.Title,
@@ -78,7 +71,7 @@ async function fetchProducts(url: string): Promise<Product[]> {
     brand:       relationSlug(e.Brand),
     collections: relationSlug(e.Collections),
     skinTypes:   skinTypeSlugs(e),
-  }));
+  };
 }
 
 /**
@@ -162,21 +155,43 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
   }, []);
 
   useEffect(() => {
+    const abort = new AbortController();
     setLoading(true);
-    Promise.all([
-      fetchFilterItems(CATEGORIES_URL),
-      fetchFilterItems(BRANDS_URL),
-      fetchFilterItems(COLLECTIONS_URL),
-      fetchFilterItems(SKIN_TYPES_URL),
-      fetchProducts(PRODUCTS_URL),
-    ]).then(([cats, brnds, cols, skins, prods]) => {
+
+    (async () => {
+      // The sidebar first: it is what the shopper reaches for, and the four
+      // lists together are a fraction of the catalogue's weight.
+      const [cats, brnds, cols, skins] = await Promise.all([
+        fetchFilterItems(CATEGORIES_URL,  abort.signal),
+        fetchFilterItems(BRANDS_URL,      abort.signal),
+        fetchFilterItems(COLLECTIONS_URL, abort.signal),
+        fetchFilterItems(SKIN_TYPES_URL,  abort.signal),
+      ]);
+      if (abort.signal.aborted) return;
       setCategories(cats);
       setBrands(brnds);
       setCollections(cols);
       setSkinTypes(skins);
-      setAllProducts(prods);
-    }).catch(() => setAllProducts([]))
-      .finally(() => setLoading(false));
+
+      // Products arrive a page at a time and are shown as they land, so the
+      // shop opens on its first hundred rather than waiting out a catalogue
+      // that could run to thousands. Only the rows this page added are mapped,
+      // which keeps the walk linear rather than quadratic.
+      const mapped: Product[] = [];
+      await fetchAll<RawProduct>(PRODUCTS_URL, {
+        signal: abort.signal,
+        onPage: (rowsSoFar) => {
+          if (abort.signal.aborted) return;
+          mapped.push(...rowsSoFar.slice(mapped.length).map(toProduct));
+          setAllProducts([...mapped]);
+          setLoading(false);
+        },
+      });
+    })()
+      .catch(() => { /* fetchAll keeps what arrived; nothing to recover here. */ })
+      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
+
+    return () => abort.abort();
   }, []);
 
   // The shop is the page — hold the loader up rather than filling the grid with
@@ -347,11 +362,14 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
               onSearchChange={setSearchValue}
               selectedCategories={selectedCategories}
               onCategoryToggle={handleCategoryToggle}
+              onCategoryAll={() => setSelectedCategories(new Set())}
               selectedCollections={selectedCollections}
               onCollectionToggle={handleCollectionToggle}
+              onCollectionAll={() => setSelectedCollections(new Set())}
               skinTypes={skinTypes}
               selectedSkinTypes={selectedSkinTypes}
               onSkinTypeToggle={handleSkinTypeToggle}
+              onSkinTypeAll={() => setSelectedSkinTypes(new Set())}
               onClear={handleClear}
             />
           </div>

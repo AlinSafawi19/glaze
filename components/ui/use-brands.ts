@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-const BRANDS_URL  = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/brands`;
-const API_HEADERS = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+import { fetchAll, endpoint } from "@/lib/api";
+
+const BRANDS_URL = endpoint("brands");
 
 export interface Brand {
   id:   string;
@@ -25,11 +26,12 @@ let cache: Promise<Brand[]> | null = null;
 
 function load(): Promise<Brand[]> {
   if (!cache) {
-    cache = fetch(BRANDS_URL, { headers: API_HEADERS })
-      .then((r) => r.json())
-      .then((data) =>
-        (data?.data ?? [])
-          .map((e: RawBrand) => ({
+    // Every page — the endpoint hands back 20 rows unasked, which would have
+    // cut the A–Z index off at whatever brand happened to be twentieth.
+    cache = fetchAll<RawBrand>(BRANDS_URL)
+      .then((rows) =>
+        rows
+          .map((e) => ({
             id:   e.id,
             name: e.Title,
             slug: e.Slug,

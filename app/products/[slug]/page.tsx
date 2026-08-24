@@ -15,10 +15,13 @@ import { useLoadingGate } from "@/components/ui/loading-gate";
 import { SectionLoading } from "@/components/ui/section-loading";
 import { ProductImage } from "@/components/ui/product-image";
 import { categorySlugs, relationSlug, type Relation, type RawRelations } from "@/lib/relations";
+import { fetchAll, endpoint } from "@/lib/api";
 import { isSoldOut, lowStockNote, parseStock } from "@/lib/stock";
 
-const PRODUCTS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products`;
-const API_HEADERS  = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+const PRODUCTS_URL = endpoint("products");
+
+/** How many other products the page shows under "you may also like". */
+const RELATED_COUNT = 4;
 
 interface Product {
   id:              string;
@@ -107,11 +110,19 @@ export default function ProductPage() {
   const { add } = useCart();
 
   useEffect(() => {
-    fetch(PRODUCTS_URL, { headers: API_HEADERS })
-      .then((r) => r.json())
-      .then((data) => {
+    const abort = new AbortController();
+
+    // The API has no lookup by slug, so the catalogue is walked until this
+    // product turns up — with enough rows behind it to fill the related strip.
+    // On a large shop that is a page or two, not the whole thing.
+    fetchAll<RawEntry>(PRODUCTS_URL, {
+      signal: abort.signal,
+      stopWhen: (rows) => rows.length > RELATED_COUNT && rows.some((e) => e.Slug === slug),
+    })
+      .then((rows) => {
+        if (abort.signal.aborted) return;
         setProducts(
-          (data?.data ?? []).map((e: RawEntry) => ({
+          rows.map((e: RawEntry) => ({
             id:              e.id,
             slug:            e.Slug                ?? "",
             title:           e.Title               ?? "",
@@ -134,8 +145,10 @@ export default function ProductPage() {
         );
       })
       .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
+
+    return () => abort.abort();
+  }, [slug]);
 
   useEffect(() => { setActiveImage(0); }, [slug]);
 
@@ -145,7 +158,7 @@ export default function ProductPage() {
   if (loading) return <main><SectionLoading className="min-h-screen bg-caledon" /></main>;
 
   const product = products.find((p) => p.slug === slug);
-  const related = products.filter((p) => p.slug !== slug).slice(0, 4);
+  const related = products.filter((p) => p.slug !== slug).slice(0, RELATED_COUNT);
   const images  = product
     ? [product.cover_img_1, product.img_2, product.img_3, product.img_4].filter(Boolean)
     : [];

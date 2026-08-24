@@ -10,6 +10,7 @@ import { Logomark } from "./logomark";
 import { useWishlist } from "./use-wishlist";
 import { useCart } from "./use-cart";
 import { useBrands, type Brand } from "./use-brands";
+import { usePagedList, PagedListControls } from "./paged-list";
 import { useScrollLock } from "./use-scroll-lock";
 
 const EASE   = [0.44, 0, 0.56, 1] as const;
@@ -24,6 +25,9 @@ const NAV: { title: string; href: string; submenu?: boolean }[] = [
 ];
 
 /** `#shop` drops the shopper past the hero, onto the freshly filtered grid. */
+/** Brands listed in a menu before "Show more" — a shop can have a great many. */
+const BRAND_MENU_PAGE_SIZE = 10;
+
 const brandHref = (slug?: string) =>
   slug ? `/shop-all?brand=${slug}#shop` : "/shop-all#shop";
 
@@ -69,6 +73,7 @@ function NavLink({ title, href, active }: { title: string; href: string; active:
  */
 function BrandsNavItem({ title, active }: { title: string; active: boolean }) {
   const { brands, loading } = useBrands();
+  const paged = usePagedList(brands, BRAND_MENU_PAGE_SIZE);
   const pathname = usePathname();
   const [open,    setOpen]    = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -147,7 +152,7 @@ function BrandsNavItem({ title, active }: { title: string; active: boolean }) {
           >
             <div className="min-w-[220px] max-h-[60vh] overflow-y-auto flex flex-col justify-start items-stretch gap-[2px] bg-lavender border border-dashed border-beige rounded-none p-[8px]">
               <BrandMenuLink href={brandHref()} label="All brands" onNavigate={() => setOpen(false)} />
-              {brands.map((brand) => (
+              {paged.visible.map((brand) => (
                 <BrandMenuLink
                   key={brand.id}
                   href={brandHref(brand.slug)}
@@ -155,6 +160,15 @@ function BrandsNavItem({ title, active }: { title: string; active: boolean }) {
                   onNavigate={() => setOpen(false)}
                 />
               ))}
+              {/* The panel scrolls, but a shop with a hundred brands should not
+                  make the shopper drag through all of them to reach the end. */}
+              <PagedListControls
+                remaining={paged.remaining}
+                expanded={paged.expanded}
+                onMore={paged.showMore}
+                onLess={paged.showLess}
+                className="px-[10px] pb-[4px]"
+              />
               {/* Only while the request is in flight — a list that comes back empty
                   leaves "All brands" standing on its own rather than a stuck spinner. */}
               {loading && (
@@ -184,7 +198,8 @@ function BrandMenuLink({
       onClick={onNavigate}
       className="w-full flex flex-row justify-start items-center px-[10px] py-[8px] rounded-none transition-colors duration-300 ease-[cubic-bezier(0.44,0,0.56,1)] hover:bg-blush"
     >
-      <ButtonSm className="!text-left !text-[14px] !text-brown">{label}</ButtonSm>
+      {/* Brand names are set as their owners write them — no uppercasing. */}
+      <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">{label}</ButtonSm>
     </Link>
   );
 }
@@ -324,6 +339,7 @@ function BrandsDrawerItem({
   onNavigate: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const paged = usePagedList(brands, BRAND_MENU_PAGE_SIZE);
 
   return (
     <div className="w-full flex flex-col justify-start items-start gap-[12px]">
@@ -359,13 +375,19 @@ function BrandsDrawerItem({
           >
             <div className="w-full flex flex-col justify-start items-start gap-[12px] pl-[12px] border-l border-dashed border-beige">
               <Link href={brandHref()} onClick={onNavigate} className="w-full">
-                <ButtonSm className="!text-left !text-[14px] !text-brown">All brands</ButtonSm>
+                <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">All brands</ButtonSm>
               </Link>
-              {brands.map((brand) => (
+              {paged.visible.map((brand) => (
                 <Link key={brand.id} href={brandHref(brand.slug)} onClick={onNavigate} className="w-full">
-                  <ButtonSm className="!text-left !text-[14px] !text-brown">{brand.name}</ButtonSm>
+                  <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">{brand.name}</ButtonSm>
                 </Link>
               ))}
+              <PagedListControls
+                remaining={paged.remaining}
+                expanded={paged.expanded}
+                onMore={paged.showMore}
+                onLess={paged.showLess}
+              />
             </div>
           </motion.div>
         )}

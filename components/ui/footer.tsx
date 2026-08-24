@@ -6,13 +6,6 @@ import { H4, SubtitleMd, BodyMd, LinkContact } from "./typography";
 import { FooterWordmark, WordmarkImage } from "./footer-wordmark";
 import { Logomark } from "./logomark";
 
-/** The address shoppers write to. Set NEXT_PUBLIC_STORE_EMAIL to change it. */
-const STORE_EMAIL = process.env.NEXT_PUBLIC_STORE_EMAIL || "glaze.skin@outlook.com";
-
-/** The number shoppers call — dialled form for the link, spaced form for reading. */
-const STORE_PHONE = "+96179345700";
-const STORE_PHONE_DISPLAY = "+961 79 345 700";
-
 function TruchetOverlay() {
   const svgRef = useRef<SVGSVGElement>(null);
   const [c, setC] = useState(14);
@@ -84,12 +77,12 @@ export function Footer() {
 
             <div className="flex-1 flex flex-col justify-start items-start gap-[10px] overflow-clip rounded-none">
               <SubtitleMd className="w-full !text-white [text-wrap:balance]">Email Us</SubtitleMd>
-              <LinkContact href={`mailto:${STORE_EMAIL}`}>{STORE_EMAIL}</LinkContact>
+              <LinkContact href={`mailto:${"hello@glazekorea.com"}`}>{"hello@glazekorea.com"}</LinkContact>
             </div>
 
             <div className="flex-1 flex flex-col justify-start items-start gap-[10px] overflow-clip rounded-none">
               <SubtitleMd className="w-full !text-white [text-wrap:balance]">Call us</SubtitleMd>
-              <LinkContact href={`tel:${STORE_PHONE}`}>{STORE_PHONE_DISPLAY}</LinkContact>
+              <LinkContact href={`tel:${"+1234567890"}`}>{"+1234567890"}</LinkContact>
             </div>
 
           </div>

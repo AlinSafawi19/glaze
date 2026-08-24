@@ -75,9 +75,13 @@ export function OutlineButton({
       className={`relative flex flex-row items-center justify-center gap-[10px] px-[12px] py-[6px] rounded-none overflow-clip cursor-pointer bg-transparent ${className}`}
       {...props}
     >
+      {/* `initial` is not optional here: without it Motion writes no opacity at
+          all on the first render, so the fill paints solid black over the
+          button and only springs away once hydration catches up. */}
       <motion.span
         aria-hidden
         className="absolute inset-0 bg-black"
+        initial={{ opacity: 0 }}
         animate={{ opacity: active ? 1 : 0 }}
         transition={SPRING}
       />
@@ -183,7 +187,11 @@ export function Button({
       style={{ transition: `all 0.2s cubic-bezier(0.44, 0, 0.56, 1)` }}
       {...props}
     >
-      <AnimatePresence mode="wait">
+      {/* `initial={false}` so the resting label is painted straight away rather
+          than fading up from `opacity: 0` once the bundle hydrates — the label
+          is in the server HTML, and a form whose submit arrives late reads as
+          the page still loading. State changes after mount still animate. */}
+      <AnimatePresence mode="wait" initial={false}>
         {buttonState === "loading" && (
           <motion.span
             key="loading"

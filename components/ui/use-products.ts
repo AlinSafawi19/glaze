@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+import { fetchAll, endpoint } from "@/lib/api";
 import { parseStock } from "@/lib/stock";
 
-const PRODUCTS_URL = `${process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL}/glaze/products?limit=100`;
-const API_HEADERS  = { Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}` };
+const PRODUCTS_URL = endpoint("products");
 
 interface RawEntry {
   id:            string;
@@ -36,10 +36,14 @@ export function useProducts() {
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    fetch(PRODUCTS_URL, { headers: API_HEADERS })
-      .then((r) => r.json())
-      .then((data) => {
-        const entries: RawEntry[] = data?.data ?? [];
+    const abort = new AbortController();
+
+    // Every page: the cart and the wishlist resolve stored slugs against this,
+    // and a slug that fell past the first page would read as a vanished
+    // product rather than one further down the catalogue.
+    fetchAll<RawEntry>(PRODUCTS_URL, { signal: abort.signal })
+      .then((entries) => {
+        if (abort.signal.aborted) return;
         setProducts(
           entries.map((e) => {
             const price    = parseFloat(e.Price)    || 0;
@@ -59,7 +63,9 @@ export function useProducts() {
         );
       })
       .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
+
+    return () => abort.abort();
   }, []);
 
   return { products, loading };

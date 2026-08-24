@@ -14,6 +14,10 @@ import {
 import { H5, SubtitleSm, bodySmBaseCls } from "./typography";
 import { OutlineButton, FilledButton } from "./button";
 import { useScrollLock } from "./use-scroll-lock";
+import { usePagedList, PagedListControls } from "./paged-list";
+
+/** Options shown per filter group before "Show more". */
+const GROUP_PAGE_SIZE = 6;
 
 const SPRING        = { type: "spring" as const, duration: 0.4, bounce: 0.2, delay: 0 };
 const SPRING_POPUP  = { type: "spring" as const, duration: 0.4, bounce: 0,   delay: 0 };
@@ -63,6 +67,78 @@ function CheckboxItem({
   );
 }
 
+/**
+ * A filter group with its own hardcoded "All" at the top.
+ *
+ * An empty selection already means "no filter applied", so "All" is not a real
+ * option that has to be stored — it is the reading of a group that is not
+ * narrowing anything. It shows checked in the two cases that come to the same
+ * thing: nothing picked, or every option picked by hand. Choosing it clears the
+ * group back to that neutral state.
+ *
+ * Nothing here can leave a group with zero options selected — unchecking the
+ * last one lands on "All" rather than on a shop with nothing in it.
+ */
+function CheckboxGroup({
+  title,
+  items,
+  selected,
+  onToggle,
+  onSelectAll,
+}: {
+  title:       string;
+  items:       FilterItem[];
+  selected:    Set<string>;
+  onToggle:    (id: string) => void;
+  onSelectAll: () => void;
+}) {
+  // Before the early return: a group can empty out between renders, and hooks
+  // cannot be skipped.
+  const paged = usePagedList(items, GROUP_PAGE_SIZE);
+
+  if (items.length === 0) return null;
+
+  const all = selected.size === 0 || selected.size === items.length;
+
+  // A pick further down the list must stay visible after "Show less", so the
+  // hidden tail is checked and reported rather than silently dropped.
+  const hiddenPicks = items
+    .slice(paged.visible.length)
+    .filter((item) => selected.has(item.id)).length;
+
+  return (
+    <div className="w-full flex flex-col justify-start items-start gap-[8px]">
+      <SubtitleSm className="w-full !text-black">{title}</SubtitleSm>
+      <CheckboxItem
+        item={{ id: "__all__", name: "All", slug: "all" }}
+        checked={all}
+        // Already the whole group: re-picking it would only be a way to show
+        // nothing, so it stays put.
+        onToggle={() => { if (selected.size > 0) onSelectAll(); }}
+      />
+      {paged.visible.map((item) => (
+        <CheckboxItem
+          key={item.id}
+          item={item}
+          checked={selected.has(item.id)}
+          onToggle={() => onToggle(item.id)}
+        />
+      ))}
+      {hiddenPicks > 0 && (
+        <span className={`${bodySmBaseCls} text-brown`}>
+          +{hiddenPicks} selected below
+        </span>
+      )}
+      <PagedListControls
+        remaining={paged.remaining}
+        expanded={paged.expanded}
+        onMore={paged.showMore}
+        onLess={paged.showLess}
+      />
+    </div>
+  );
+}
+
 export interface FiltersProps {
   categories:         FilterItem[];
   collections:        FilterItem[];
@@ -71,10 +147,13 @@ export interface FiltersProps {
   onSearchChange:     (v: string) => void;
   selectedCategories: Set<string>;
   onCategoryToggle:   (id: string) => void;
+  onCategoryAll:      () => void;
   selectedCollections: Set<string>;
   onCollectionToggle:  (id: string) => void;
+  onCollectionAll:     () => void;
   selectedSkinTypes:  Set<string>;
   onSkinTypeToggle:   (id: string) => void;
+  onSkinTypeAll:      () => void;
   onClear:            () => void;
   className?:         string;
 }
@@ -82,9 +161,9 @@ export interface FiltersProps {
 function FilterSections({
   categories, collections, skinTypes,
   searchValue, onSearchChange,
-  selectedCategories, onCategoryToggle,
-  selectedCollections, onCollectionToggle,
-  selectedSkinTypes, onSkinTypeToggle,
+  selectedCategories, onCategoryToggle, onCategoryAll,
+  selectedCollections, onCollectionToggle, onCollectionAll,
+  selectedSkinTypes, onSkinTypeToggle, onSkinTypeAll,
 }: Omit<FiltersProps, "onClear" | "className">) {
   return (
     <>
@@ -104,46 +183,30 @@ function FilterSections({
         </div>
       </div>
 
-      {/* Categories */}
-      <div className="w-full flex flex-col justify-start items-start gap-[8px]">
-        <SubtitleSm className="w-full !text-black">Category</SubtitleSm>
-        {categories.map((cat) => (
-          <CheckboxItem
-            key={cat.id}
-            item={cat}
-            checked={selectedCategories.has(cat.id)}
-            onToggle={() => onCategoryToggle(cat.id)}
-          />
-        ))}
-      </div>
+      <CheckboxGroup
+        title="Category"
+        items={categories}
+        selected={selectedCategories}
+        onToggle={onCategoryToggle}
+        onSelectAll={onCategoryAll}
+      />
 
       {/* Skin type — stays hidden until the dashboard list has entries */}
-      {skinTypes.length > 0 && (
-        <div className="w-full flex flex-col justify-start items-start gap-[8px]">
-          <SubtitleSm className="w-full !text-black">Skin type</SubtitleSm>
-          {skinTypes.map((skin) => (
-            <CheckboxItem
-              key={skin.id}
-              item={skin}
-              checked={selectedSkinTypes.has(skin.id)}
-              onToggle={() => onSkinTypeToggle(skin.id)}
-            />
-          ))}
-        </div>
-      )}
+      <CheckboxGroup
+        title="Skin type"
+        items={skinTypes}
+        selected={selectedSkinTypes}
+        onToggle={onSkinTypeToggle}
+        onSelectAll={onSkinTypeAll}
+      />
 
-      {/* Collections */}
-      <div className="w-full flex flex-col justify-start items-start gap-[8px]">
-        <SubtitleSm className="w-full !text-black">Collection</SubtitleSm>
-        {collections.map((col) => (
-          <CheckboxItem
-            key={col.id}
-            item={col}
-            checked={selectedCollections.has(col.id)}
-            onToggle={() => onCollectionToggle(col.id)}
-          />
-        ))}
-      </div>
+      <CheckboxGroup
+        title="Collection"
+        items={collections}
+        selected={selectedCollections}
+        onToggle={onCollectionToggle}
+        onSelectAll={onCollectionAll}
+      />
     </>
   );
 }
@@ -151,9 +214,9 @@ function FilterSections({
 export function Filters({
   categories, collections, skinTypes,
   searchValue, onSearchChange,
-  selectedCategories, onCategoryToggle,
-  selectedCollections, onCollectionToggle,
-  selectedSkinTypes, onSkinTypeToggle,
+  selectedCategories, onCategoryToggle, onCategoryAll,
+  selectedCollections, onCollectionToggle, onCollectionAll,
+  selectedSkinTypes, onSkinTypeToggle, onSkinTypeAll,
   onClear,
   className = "",
 }: FiltersProps) {
@@ -181,9 +244,9 @@ export function Filters({
   const sectionProps = {
     categories, collections, skinTypes,
     searchValue, onSearchChange,
-    selectedCategories, onCategoryToggle,
-    selectedCollections, onCollectionToggle,
-    selectedSkinTypes, onSkinTypeToggle,
+    selectedCategories, onCategoryToggle, onCategoryAll,
+    selectedCollections, onCollectionToggle, onCollectionAll,
+    selectedSkinTypes, onSkinTypeToggle, onSkinTypeAll,
   };
 
   return (
