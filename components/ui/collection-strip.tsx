@@ -7,11 +7,9 @@ import { OutlineButton } from "./button";
 import { ProductCard } from "./product-card";
 import { useLoadingGate } from "./loading-gate";
 import { relationSlug, type Relation } from "@/lib/relations";
-import { fetchAll, endpoint } from "@/lib/api";
+import { fetchRows, MAX_PAGE_SIZE } from "@/lib/api";
 import { parseStock } from "@/lib/stock";
 
-const PRODUCTS_URL    = endpoint("products");
-const COLLECTIONS_URL = endpoint("collections");
 
 interface RawProduct {
   id:            string;
@@ -40,64 +38,93 @@ interface StripProduct {
   collection: string;
 }
 
-interface Catalogue {
-  products:    StripProduct[];
-  collections: RawCollection[];
+/** How many products a strip shows before "see all". */
+const STRIP_SIZE = 8;
+
+/**
+ * The collection list, shared by every strip on the page.
+ *
+ * Only the headings: each strip fetches its own products, so this is a short
+ * list of names rather than a catalogue, and one request covers all of them.
+ */
+let collectionsCache: Promise<RawCollection[]> | null = null;
+
+function loadCollections(): Promise<RawCollection[]> {
+  if (!collectionsCache) {
+    collectionsCache = fetchRows<RawCollection>("collections", { limit: MAX_PAGE_SIZE })
+      .catch(() => {
+        collectionsCache = null; // let the next mount try again
+        return [];
+      });
+  }
+  return collectionsCache;
+}
+
+function toStripProduct(e: RawProduct): StripProduct {
+  return {
+    id:         e.id,
+    slug:       e.Slug,
+    title:      e.Title,
+    price:      parseFloat(e.Price)    || 0,
+    discount:   parseFloat(e.Discount) || 0,
+    imageSrc:   e["Cover img 1"],
+    stock:      parseStock(e.Stock),
+    collection: relationSlug(e.Collections),
+  };
 }
 
 /**
- * The home page runs more than one of these strips and each needs the same two
- * lists, so they share a single in-flight request rather than fetching the
- * catalogue once per section.
+ * One strip's products, asked for by collection.
+ *
+ * The filter is the server's, so a strip costs the eight rows it shows however
+ * large the catalogue is - and a collection whose products sit deep in the
+ * table is no longer a strip that renders empty.
  */
-let cache: Promise<Catalogue> | null = null;
+function useStripProducts(collectionSlug: string) {
+  // Null means "still asking". A strip with no collection behind it has nothing
+  // to ask for, so it starts settled and empty.
+  const [products, setProducts] = useState<StripProduct[] | null>(
+    () => (collectionSlug ? null : []),
+  );
 
-function load(): Promise<Catalogue> {
-  if (!cache) {
-    // Both lists are walked page by page: a strip picks its products by
-    // collection on the client, so a catalogue cut off at the endpoint's
-    // default page would leave later collections looking empty.
-    cache = Promise.all([
-      fetchAll<RawProduct>(PRODUCTS_URL),
-      fetchAll<RawCollection>(COLLECTIONS_URL),
-    ])
-      .then(([productRows, collectionRows]) => ({
-        products: productRows.map((e) => ({
-          id:         e.id,
-          slug:       e.Slug,
-          title:      e.Title,
-          price:      parseFloat(e.Price)    || 0,
-          discount:   parseFloat(e.Discount) || 0,
-          imageSrc:   e["Cover img 1"],
-          stock:      parseStock(e.Stock),
-          collection: relationSlug(e.Collections),
-        })),
-        collections: collectionRows,
-      }))
-      .catch(() => {
-        cache = null; // let the next mount try again
-        return { products: [], collections: [] };
-      });
-  }
-  return cache;
+  useEffect(() => {
+    if (!collectionSlug) return;
+
+    const abort = new AbortController();
+
+    fetchRows<RawProduct>(
+      "products",
+      { collection: [collectionSlug], limit: STRIP_SIZE },
+      abort.signal,
+    )
+      .then((rows) => { if (!abort.signal.aborted) setProducts(rows.map(toStripProduct)); })
+      .catch(() => { if (!abort.signal.aborted) setProducts([]); });
+
+    return () => abort.abort();
+  }, [collectionSlug]);
+
+  return products;
 }
 
 function useCollection(slug: string) {
-  const [catalogue, setCatalogue] = useState<Catalogue | null>(null);
+  const [collections, setCollections] = useState<RawCollection[] | null>(null);
+  const products = useStripProducts(slug);
 
   useEffect(() => {
     let alive = true;
-    load().then((data) => { if (alive) setCatalogue(data); });
+    loadCollections().then((rows) => { if (alive) setCollections(rows); });
     return () => { alive = false; };
   }, []);
 
+  const loading = collections === null || products === null;
+
   // Part of the home page proper, so it holds the page loader up.
-  useLoadingGate(catalogue === null);
+  useLoadingGate(loading);
 
   return {
-    loading:    catalogue === null,
-    products:   catalogue?.products.filter((p) => p.collection === slug) ?? [],
-    collection: catalogue?.collections.find((c) => c.Slug === slug) ?? null,
+    loading,
+    products:   products ?? [],
+    collection: collections?.find((c) => c.Slug === slug) ?? null,
   };
 }
 

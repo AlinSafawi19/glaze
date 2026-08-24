@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { H4 } from "./typography";
 import { Ticker } from "./ticker";
-import { fetchAll, endpoint } from "@/lib/api";
+import { fetchRows, MAX_PAGE_SIZE } from "@/lib/api";
 import { useLoadingGate } from "./loading-gate";
 
-const TICKER_URL = endpoint("ticker");
 
 interface RawTickerItem {
   id:    string;
@@ -25,7 +24,8 @@ function useTickerLines() {
   useEffect(() => {
     const abort = new AbortController();
 
-    fetchAll<RawTickerItem>(TICKER_URL, { signal: abort.signal })
+    // A banner is a handful of lines by design; one page covers it.
+    fetchRows<RawTickerItem>("ticker", { limit: MAX_PAGE_SIZE }, abort.signal)
       .then((entries) => {
         if (abort.signal.aborted) return;
         setLines(

@@ -1,23 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Eraser } from "lucide-react";
 import { H4, ItalicBodySm } from "./typography";
-import type { FilterItem } from "./filters";
-import { usePagedList, PagedListControls } from "./paged-list";
-
-/** Brand chips shown per letter before "Show more". */
-const CHIP_PAGE_SIZE = 24;
+import { PagedListControls } from "./paged-list";
+import { ALL_LETTERS, NON_ALPHA, type BrandIndexData } from "./use-shop-data";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-const ALL      = "ALL";
-const OTHER    = "#";
-
-/** Brands that do not start with a letter are grouped under `#`. */
-function initialOf(name: string): string {
-  const first = name.trim().charAt(0).toUpperCase();
-  return ALPHABET.includes(first) ? first : OTHER;
-}
 
 const EASE = "cubic-bezier(0.44, 0, 0.56, 1)";
 
@@ -50,44 +38,36 @@ function LetterButton({
 }
 
 export interface BrandIndexProps {
-  brands:    FilterItem[];
+  /** The server-paged brand list, letter and all. */
+  data:      BrandIndexData;
+  /** Slugs of the brands currently filtering the shop. */
   selected:  Set<string>;
-  onToggle:  (id: string) => void;
+  onToggle:  (slug: string) => void;
   onClear:   () => void;
   className?: string;
 }
 
 /**
  * Brands browse strip — an A–Z index rather than a checkbox list, so the full
- * roster stays scannable above the shop. Selections drive the same
- * `selectedBrands` state the sidebar filters use.
+ * roster stays scannable above the shop.
+ *
+ * The letter is a query, not a client-side filter: picking one asks the server
+ * for that letter's brands. Which letters are worth offering comes back as a
+ * facet, so the index stays accurate without the page ever holding the whole
+ * list. Selections drive the same brand filter the product query uses.
  */
 export function BrandIndex({
-  brands,
+  data,
   selected,
   onToggle,
   onClear,
   className = "",
 }: BrandIndexProps) {
-  const [letter, setLetter] = useState(ALL);
+  const { items, total, letter, setLetter, initials, hasMore, loadingMore, loadMore } = data;
 
-  // Which initials actually have brands behind them.
-  const available = useMemo(() => {
-    const set = new Set<string>();
-    brands.forEach((b) => set.add(initialOf(b.name)));
-    return set;
-  }, [brands]);
-
-  const visible = useMemo(() => {
-    const list = letter === ALL ? brands : brands.filter((b) => initialOf(b.name) === letter);
-    return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [brands, letter]);
-
-  // Resets to the first chunk whenever `visible` changes — that is, on every
-  // letter the shopper picks.
-  const paged = usePagedList(visible, CHIP_PAGE_SIZE);
-
-  if (brands.length === 0) return null;
+  // Nothing to browse: no strip. Keyed on the facet rather than the page, so it
+  // does not disappear on a letter that happens to be empty.
+  if (initials.size === 0 && items.length === 0) return null;
 
   return (
     <div className={`w-full flex flex-col justify-start items-start gap-[16px] p-0 rounded-none ${className}`}>
@@ -110,62 +90,63 @@ export function BrandIndex({
       {/* A–Z index */}
       <div className="w-full flex flex-row flex-wrap justify-start items-center gap-x-[12px] gap-y-[8px] pb-[16px] border-b border-dashed border-beige">
         <LetterButton
-          label={ALL}
-          active={letter === ALL}
+          label={ALL_LETTERS}
+          active={letter === ALL_LETTERS}
           disabled={false}
-          onClick={() => setLetter(ALL)}
+          onClick={() => setLetter(ALL_LETTERS)}
         />
         {ALPHABET.map((l) => (
           <LetterButton
             key={l}
             label={l}
             active={letter === l}
-            disabled={!available.has(l)}
+            disabled={!initials.has(l)}
             onClick={() => setLetter(l)}
           />
         ))}
-        {available.has(OTHER) && (
+        {initials.has(NON_ALPHA) && (
           <LetterButton
-            label={OTHER}
-            active={letter === OTHER}
+            label={NON_ALPHA}
+            active={letter === NON_ALPHA}
             disabled={false}
-            onClick={() => setLetter(OTHER)}
+            onClick={() => setLetter(NON_ALPHA)}
           />
         )}
       </div>
 
       {/* Brands under the active letter */}
-      {visible.length === 0 ? (
+      {items.length === 0 ? (
         <ItalicBodySm className="!text-brown !text-left">
           No brands under {letter}
         </ItalicBodySm>
       ) : (
         <div className="w-full flex flex-col justify-start items-start gap-[12px]">
-        <div className="w-full flex flex-row flex-wrap justify-start items-center gap-[8px]">
-          {paged.visible.map((brand) => {
-            const on = selected.has(brand.id);
-            return (
-              <button
-                key={brand.id}
-                type="button"
-                onClick={() => onToggle(brand.id)}
-                aria-pressed={on}
-                className={`font-clash font-medium clash-features text-[13px] leading-[1.4] rounded-none border border-dashed px-[16px] py-[8px] cursor-pointer
-                  ${on ? "bg-black border-black text-accent" : "bg-transparent border-beige text-brown hover:bg-blush hover:text-plum"}`}
-                style={{ transition: `background-color 0.3s ${EASE}, color 0.3s ${EASE}, border-color 0.3s ${EASE}` }}
-              >
-                {brand.name}
-              </button>
-            );
-          })}
-        </div>
-        <PagedListControls
-          remaining={paged.remaining}
-          expanded={paged.expanded}
-          onMore={paged.showMore}
-          onLess={paged.showLess}
-          className="!pt-0"
-        />
+          <div className="w-full flex flex-row flex-wrap justify-start items-center gap-[8px]">
+            {items.map((brand) => {
+              const on = selected.has(brand.slug);
+              return (
+                <button
+                  key={brand.id}
+                  type="button"
+                  onClick={() => onToggle(brand.slug)}
+                  aria-pressed={on}
+                  className={`font-clash font-medium clash-features text-[13px] leading-[1.4] rounded-none border border-dashed px-[16px] py-[8px] cursor-pointer
+                    ${on ? "bg-black border-black text-accent" : "bg-transparent border-beige text-brown hover:bg-blush hover:text-plum"}`}
+                  style={{ transition: `background-color 0.3s ${EASE}, color 0.3s ${EASE}, border-color 0.3s ${EASE}` }}
+                >
+                  {brand.name}
+                </button>
+              );
+            })}
+          </div>
+          {hasMore && (
+            <PagedListControls
+              remaining={total - items.length}
+              busy={loadingMore}
+              onMore={loadMore}
+              className="!pt-0"
+            />
+          )}
         </div>
       )}
 

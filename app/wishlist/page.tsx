@@ -8,9 +8,8 @@ import { OutlineButton } from "@/components/ui/button";
 import { useWishlist } from "@/components/ui/use-wishlist";
 import { useLoadingGate } from "@/components/ui/loading-gate";
 import { SectionLoading } from "@/components/ui/section-loading";
-import { fetchAll, endpoint } from "@/lib/api";
+import { fetchBySlugs } from "@/lib/api";
 
-const PRODUCTS_URL = endpoint("products");
 
 interface RawEntry {
   id:            string;
@@ -35,12 +34,23 @@ export default function Wishlist() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading,  setLoading]  = useState(true);
 
+
+  // Only the saved products, and in the order they were saved.
+  const key = slugs.join(",");
+
+  const [sent, setSent] = useState(key);
+  if (sent !== key) {
+    setSent(key);
+    setLoading(key !== "");
+    if (key === "") setProducts([]);
+  }
+
   useEffect(() => {
+    if (key === "") return;
+
     const abort = new AbortController();
 
-    // Saved slugs are resolved against this, so it has to be the whole
-    // catalogue and not whichever page the endpoint returns by default.
-    fetchAll<RawEntry>(PRODUCTS_URL, { signal: abort.signal })
+    fetchBySlugs<RawEntry & { Slug: string }>("products", key.split(","), abort.signal)
       .then((entries) => {
         if (abort.signal.aborted) return;
         setProducts(

@@ -14,7 +14,7 @@ import { maxOrderable } from "@/lib/stock";
 
 export default function Cart() {
   const { lines, ready, setQty, remove } = useCart();
-  const { products, loading } = useProducts();
+  const { products, loading } = useProducts(lines.map((line) => line.slug));
 
   const items = lines
     .map((line) => {

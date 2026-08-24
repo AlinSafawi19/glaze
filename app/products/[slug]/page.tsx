@@ -15,13 +15,34 @@ import { useLoadingGate } from "@/components/ui/loading-gate";
 import { SectionLoading } from "@/components/ui/section-loading";
 import { ProductImage } from "@/components/ui/product-image";
 import { categorySlugs, relationSlug, type Relation, type RawRelations } from "@/lib/relations";
-import { fetchAll, endpoint } from "@/lib/api";
+import { fetchBySlug, fetchRows } from "@/lib/api";
 import { isSoldOut, lowStockNote, parseStock } from "@/lib/stock";
-
-const PRODUCTS_URL = endpoint("products");
 
 /** How many other products the page shows under "you may also like". */
 const RELATED_COUNT = 4;
+
+function toProduct(e: RawEntry): Product {
+  return {
+    id:              e.id,
+    slug:            e.Slug                ?? "",
+    title:           e.Title               ?? "",
+    price:           parseFloat(e.Price)        || 0,
+    discount:        parseFloat(e.Discount)     || 0,
+    cover_img_1:     e["Cover img 1"]      ?? "",
+    img_2:           e["Img 2"]             ?? "",
+    img_3:           e["Img 3"]             ?? "",
+    img_4:           e["Img 4"]             ?? "",
+    categories:      categorySlugs(e),
+    brand:           relationSlug(e.Brand),
+    size:            e.Size                 ?? "",
+    sku:             parseInt(e.SKU)        || 0,
+    stock:           parseStock(e.Stock),
+    description:     e.Description          ?? "",
+    key_ingredients: e["Key Ingredients"]   ?? "",
+    sales_type:      e["Sales type"]        ?? "",
+    collections:     relationSlug(e.Collections),
+  };
+}
 
 interface Product {
   id:              string;
@@ -103,63 +124,59 @@ function FeatureCard({ title, description, icon }: { title: string; description:
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
 
-  const [products,     setProducts]     = useState<Product[]>([]);
+  const [product,      setProduct]      = useState<Product | null>(null);
+  const [related,      setRelated]      = useState<Product[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [activeImage,  setActiveImage]  = useState(0);
   const [added,        setAdded]        = useState(false);
   const { add } = useCart();
 
+  // Marked as loading in the render that changed the slug, so the previous
+  // product is never left on screen while the next one is being fetched.
+  const [sent, setSent] = useState(slug);
+  if (sent !== slug) {
+    setSent(slug);
+    setLoading(true);
+    // The gallery belongs to the product that is leaving; the next one opens on
+    // its own cover.
+    setActiveImage(0);
+  }
+
   useEffect(() => {
     const abort = new AbortController();
 
-    // The API has no lookup by slug, so the catalogue is walked until this
-    // product turns up — with enough rows behind it to fill the related strip.
-    // On a large shop that is a page or two, not the whole thing.
-    fetchAll<RawEntry>(PRODUCTS_URL, {
-      signal: abort.signal,
-      stopWhen: (rows) => rows.length > RELATED_COUNT && rows.some((e) => e.Slug === slug),
-    })
-      .then((rows) => {
+    // Two narrow queries rather than a catalogue: this product by slug, and a
+    // handful of others for the strip underneath. Both cost the same whether
+    // the shop stocks fifty products or fifty thousand.
+    Promise.all([
+      fetchBySlug<RawEntry>("products", slug, abort.signal),
+      fetchRows<RawEntry>(
+        "products",
+        { exclude: [slug], limit: RELATED_COUNT },
+        abort.signal,
+      ),
+    ])
+      .then(([found, others]) => {
         if (abort.signal.aborted) return;
-        setProducts(
-          rows.map((e: RawEntry) => ({
-            id:              e.id,
-            slug:            e.Slug                ?? "",
-            title:           e.Title               ?? "",
-            price:           parseFloat(e.Price)        || 0,
-            discount:        parseFloat(e.Discount)     || 0,
-            cover_img_1:     e["Cover img 1"]      ?? "",
-            img_2:           e["Img 2"]             ?? "",
-            img_3:           e["Img 3"]             ?? "",
-            img_4:           e["Img 4"]             ?? "",
-            categories:      categorySlugs(e),
-            brand:           relationSlug(e.Brand),
-            size:            e.Size                 ?? "",
-            sku:             parseInt(e.SKU)        || 0,
-            stock:           parseStock(e.Stock),
-            description:     e.Description          ?? "",
-            key_ingredients: e["Key Ingredients"]   ?? "",
-            sales_type:      e["Sales type"]        ?? "",
-            collections:     relationSlug(e.Collections),
-          }))
-        );
+        setProduct(found ? toProduct(found) : null);
+        setRelated(others.map(toProduct));
       })
-      .catch(() => setProducts([]))
+      .catch(() => {
+        if (abort.signal.aborted) return;
+        setProduct(null);
+        setRelated([]);
+      })
       .finally(() => { if (!abort.signal.aborted) setLoading(false); });
 
     return () => abort.abort();
   }, [slug]);
-
-  useEffect(() => { setActiveImage(0); }, [slug]);
 
   // On the first open the page loader covers this; on a navigation into the
   // product the section holds the height while the catalogue lands.
   useLoadingGate(loading);
   if (loading) return <main><SectionLoading className="min-h-screen bg-caledon" /></main>;
 
-  const product = products.find((p) => p.slug === slug);
-  const related = products.filter((p) => p.slug !== slug).slice(0, RELATED_COUNT);
-  const images  = product
+  const images = product
     ? [product.cover_img_1, product.img_2, product.img_3, product.img_4].filter(Boolean)
     : [];
 

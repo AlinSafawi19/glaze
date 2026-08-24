@@ -14,10 +14,8 @@ import {
 import { H5, SubtitleSm, bodySmBaseCls } from "./typography";
 import { OutlineButton, FilledButton } from "./button";
 import { useScrollLock } from "./use-scroll-lock";
-import { usePagedList, PagedListControls } from "./paged-list";
-
-/** Options shown per filter group before "Show more". */
-const GROUP_PAGE_SIZE = 6;
+import { PagedListControls } from "./paged-list";
+import type { PagedList } from "./use-shop-data";
 
 const SPRING        = { type: "spring" as const, duration: 0.4, bounce: 0.2, delay: 0 };
 const SPRING_POPUP  = { type: "spring" as const, duration: 0.4, bounce: 0,   delay: 0 };
@@ -68,7 +66,7 @@ function CheckboxItem({
 }
 
 /**
- * A filter group with its own hardcoded "All" at the top.
+ * A filter group: its options, an "All" at the top, and a way to reach the rest.
  *
  * An empty selection already means "no filter applied", so "All" is not a real
  * option that has to be stored — it is the reading of a group that is not
@@ -76,83 +74,84 @@ function CheckboxItem({
  * thing: nothing picked, or every option picked by hand. Choosing it clears the
  * group back to that neutral state.
  *
- * Nothing here can leave a group with zero options selected — unchecking the
- * last one lands on "All" rather than on a shop with nothing in it.
+ * Options arrive a page at a time, so "every option" is only knowable once the
+ * server has no more to give — until then a full-looking group is just a group
+ * with more behind it.
+ *
+ * Selections are slugs rather than ids, because slugs are what the product
+ * query filters on and what the shop's own links carry.
  */
 function CheckboxGroup({
   title,
-  items,
+  options,
   selected,
   onToggle,
   onSelectAll,
 }: {
   title:       string;
-  items:       FilterItem[];
+  options:     PagedList<FilterItem>;
   selected:    Set<string>;
-  onToggle:    (id: string) => void;
+  onToggle:    (slug: string) => void;
   onSelectAll: () => void;
 }) {
-  // Before the early return: a group can empty out between renders, and hooks
-  // cannot be skipped.
-  const paged = usePagedList(items, GROUP_PAGE_SIZE);
+  const { items, total, hasMore, loadingMore, loadMore } = options;
 
   if (items.length === 0) return null;
 
-  const all = selected.size === 0 || selected.size === items.length;
+  const all = selected.size === 0 || (!hasMore && selected.size === items.length);
 
-  // A pick further down the list must stay visible after "Show less", so the
-  // hidden tail is checked and reported rather than silently dropped.
-  const hiddenPicks = items
-    .slice(paged.visible.length)
-    .filter((item) => selected.has(item.id)).length;
+  // A pick the shopper made before scrolling the list back up must still be
+  // accounted for, so anything selected that is not on screen is counted.
+  const shown  = new Set(items.map((item) => item.slug));
+  const offList = [...selected].filter((slug) => !shown.has(slug)).length;
 
   return (
     <div className="w-full flex flex-col justify-start items-start gap-[8px]">
       <SubtitleSm className="w-full !text-black">{title}</SubtitleSm>
       <CheckboxItem
-        item={{ id: "__all__", name: "All", slug: "all" }}
+        item={{ id: "__all__", name: "All", slug: "__all__" }}
         checked={all}
         // Already the whole group: re-picking it would only be a way to show
         // nothing, so it stays put.
         onToggle={() => { if (selected.size > 0) onSelectAll(); }}
       />
-      {paged.visible.map((item) => (
+      {items.map((item) => (
         <CheckboxItem
           key={item.id}
           item={item}
-          checked={selected.has(item.id)}
-          onToggle={() => onToggle(item.id)}
+          checked={selected.has(item.slug)}
+          onToggle={() => onToggle(item.slug)}
         />
       ))}
-      {hiddenPicks > 0 && (
+      {offList > 0 && (
         <span className={`${bodySmBaseCls} text-brown`}>
-          +{hiddenPicks} selected below
+          +{offList} selected elsewhere
         </span>
       )}
       <PagedListControls
-        remaining={paged.remaining}
-        expanded={paged.expanded}
-        onMore={paged.showMore}
-        onLess={paged.showLess}
+        remaining={total - items.length}
+        busy={loadingMore}
+        onMore={loadMore}
       />
     </div>
   );
 }
 
 export interface FiltersProps {
-  categories:         FilterItem[];
-  collections:        FilterItem[];
-  skinTypes:          FilterItem[];
+  categories:         PagedList<FilterItem>;
+  collections:        PagedList<FilterItem>;
+  skinTypes:          PagedList<FilterItem>;
   searchValue:        string;
   onSearchChange:     (v: string) => void;
+  /** Every selection is a set of slugs — see {@link CheckboxGroup}. */
   selectedCategories: Set<string>;
-  onCategoryToggle:   (id: string) => void;
+  onCategoryToggle:   (slug: string) => void;
   onCategoryAll:      () => void;
   selectedCollections: Set<string>;
-  onCollectionToggle:  (id: string) => void;
+  onCollectionToggle:  (slug: string) => void;
   onCollectionAll:     () => void;
   selectedSkinTypes:  Set<string>;
-  onSkinTypeToggle:   (id: string) => void;
+  onSkinTypeToggle:   (slug: string) => void;
   onSkinTypeAll:      () => void;
   onClear:            () => void;
   className?:         string;
@@ -185,7 +184,7 @@ function FilterSections({
 
       <CheckboxGroup
         title="Category"
-        items={categories}
+        options={categories}
         selected={selectedCategories}
         onToggle={onCategoryToggle}
         onSelectAll={onCategoryAll}
@@ -194,7 +193,7 @@ function FilterSections({
       {/* Skin type — stays hidden until the dashboard list has entries */}
       <CheckboxGroup
         title="Skin type"
-        items={skinTypes}
+        options={skinTypes}
         selected={selectedSkinTypes}
         onToggle={onSkinTypeToggle}
         onSelectAll={onSkinTypeAll}
@@ -202,7 +201,7 @@ function FilterSections({
 
       <CheckboxGroup
         title="Collection"
-        items={collections}
+        options={collections}
         selected={selectedCollections}
         onToggle={onCollectionToggle}
         onSelectAll={onCollectionAll}

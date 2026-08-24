@@ -1,34 +1,53 @@
 /**
  * The storefront's half of the dashboard's public API.
  *
- * Every collection endpoint is paged: `?page=` is 1-based, `?limit=` defaults to
- * 20 and is **capped at 100 server-side** — asking for more silently returns
- * 100. Responses carry `{ data, pagination: { total, page, limit, totalPages } }`.
+ * Every collection endpoint takes the same query language: `page` and `limit`
+ * for the window, `slug` to fetch named rows, `search`, `startsWith`, `exclude`
+ * and `sort`, plus the relation filters `category`, `brand`, `collection` and
+ * `skinType` on products. Filtering happens in the database, so a request
+ * returns the rows being shown and nothing else — the browser never holds the
+ * catalogue, and a shop can grow without the shop page growing with it.
  *
- * The API has no filtering or search of its own, so the shop's category, brand,
- * collection and skin-type filters have to run over the whole catalogue on the
- * client. That makes walking the pages non-optional: a single request cannot
- * return more than 100 rows, and a request with no `limit` at all returns 20.
+ * Responses are `{ data, pagination: { total, page, limit, totalPages,
+ * hasMore }, facets? }`. A `limit` above 100 is refused rather than clamped, so
+ * requests are held to that ceiling here before they are sent.
  */
 
 const BASE = process.env.NEXT_PUBLIC_DASHBOARD_BACKEND_URL;
 
-export const API_HEADERS = {
+const API_HEADERS = {
   Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_KEY}`,
 };
 
-/** Server-side ceiling on `limit`. Larger values are clamped, not rejected. */
+/** Server-side ceiling on `limit`. Asking for more is a 400, not a short page. */
 export const MAX_PAGE_SIZE = 100;
-
-/**
- * Stop walking after this many pages — 10,000 rows at the maximum page size.
- * A shop is not expected to reach it; it is here so a backend that reports a
- * wrong `totalPages` cannot spin the browser forever.
- */
-const MAX_PAGES = 100;
 
 export function endpoint(collection: string): string {
   return `${BASE}/glaze/${collection}`;
+}
+
+/** Titles that do not begin with a letter, as `startsWith` spells it. */
+export const NON_ALPHA = "#";
+
+export type Sort = "added" | "name" | "price" | "-price" | "newest" | "oldest";
+
+export interface Query {
+  page?:  number;
+  limit?: number;
+  /** Exact slugs — resolves a saved cart or one product page in one request. */
+  slug?:  string[];
+  /** Slugs to leave out, for a related-products strip. */
+  exclude?: string[];
+  search?: string;
+  /** A single letter, or {@link NON_ALPHA}. */
+  startsWith?: string;
+  category?:   string[];
+  brand?:      string[];
+  collection?: string[];
+  skinType?:   string[];
+  sort?:       Sort;
+  /** Aggregates to return alongside the page. Currently only `initials`. */
+  facets?: string[];
 }
 
 export interface Pagination {
@@ -36,96 +55,131 @@ export interface Pagination {
   page:       number;
   limit:      number;
   totalPages: number;
+  hasMore:    boolean;
 }
 
-export interface PageResult<T> {
+export interface Facets {
+  /** Distinct first letters across the whole collection, uppercase. */
+  initials?: string[];
+}
+
+export interface Page<T> {
   rows:       T[];
   pagination: Pagination;
+  facets:     Facets;
 }
 
-/** One page of a collection. Throws on a network or HTTP failure. */
-export async function fetchPage<T>(
-  url: string,
-  { page = 1, limit = MAX_PAGE_SIZE, signal }: { page?: number; limit?: number; signal?: AbortSignal } = {},
-): Promise<PageResult<T>> {
-  const target = new URL(url);
-  target.searchParams.set("page", String(page));
-  target.searchParams.set("limit", String(Math.min(limit, MAX_PAGE_SIZE)));
+/** Empty lists are dropped rather than sent as `?brand=`, which reads as noise. */
+function buildUrl(collection: string, query: Query): URL {
+  const url = new URL(endpoint(collection));
+  const set = (key: string, value: string) => url.searchParams.set(key, value);
 
-  const res = await fetch(target, { headers: API_HEADERS, signal });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (query.page)  set("page", String(query.page));
+  if (query.limit) set("limit", String(Math.min(query.limit, MAX_PAGE_SIZE)));
+  if (query.search?.trim())     set("search", query.search.trim());
+  if (query.startsWith)         set("startsWith", query.startsWith);
+  if (query.sort)               set("sort", query.sort);
 
-  const body = await res.json();
-  const rows: T[] = body?.data ?? [];
+  for (const key of ["slug", "exclude", "category", "brand", "collection", "skinType", "facets"] as const) {
+    const values = query[key];
+    if (values && values.length > 0) set(key, values.join(","));
+  }
 
-  // An endpoint that reports no pagination is treated as a single page, so a
-  // shape change upstream degrades to today's behaviour instead of looping.
-  const reported = body?.pagination;
-  return {
-    rows,
-    pagination: {
-      total:      Number(reported?.total)      || rows.length,
-      page:       Number(reported?.page)       || page,
-      limit:      Number(reported?.limit)      || rows.length,
-      totalPages: Number(reported?.totalPages) || 1,
-    },
-  };
-}
-
-export interface FetchAllOptions<T> {
-  signal?: AbortSignal;
-  /** Rows per request. Clamped to {@link MAX_PAGE_SIZE}. */
-  limit?:  number;
-  /**
-   * Called as each page lands, with everything gathered so far. Lets a list
-   * paint its first hundred rows while the rest are still arriving, rather than
-   * holding the page blank until the last one.
-   */
-  onPage?: (rowsSoFar: T[], pagination: Pagination) => void;
-  /**
-   * Checked after each page: return true to stop walking. Lets a caller that
-   * only needs to find one row — a product page resolving a slug — leave the
-   * rest of a large catalogue on the server.
-   */
-  stopWhen?: (rowsSoFar: T[]) => boolean;
+  return url;
 }
 
 /**
- * Every row of a collection, gathered a page at a time.
+ * One page of a collection.
  *
- * Pages are walked in sequence rather than fired off at once: the row count is
- * only known after the first response, and a shop with a large catalogue should
- * not open by throwing thirty parallel requests at its own backend.
- *
- * A failure part-way through keeps what already arrived — a shop showing its
- * first few hundred products beats a shop showing none.
+ * Throws on a network failure or an error status — including a 400, which means
+ * the query itself was wrong and is worth surfacing rather than swallowing.
  */
-export async function fetchAll<T>(
-  url: string,
-  { signal, limit = MAX_PAGE_SIZE, onPage, stopWhen }: FetchAllOptions<T> = {},
-): Promise<T[]> {
-  const rows: T[] = [];
+export async function fetchPage<T>(
+  collection: string,
+  query: Query = {},
+  signal?: AbortSignal,
+): Promise<Page<T>> {
+  const res = await fetch(buildUrl(collection, query), { headers: API_HEADERS, signal });
 
-  try {
-    let page  = 1;
-    let pages = 1;
-
-    do {
-      const result = await fetchPage<T>(url, { page, limit, signal });
-      rows.push(...result.rows);
-      pages = Math.min(result.pagination.totalPages, MAX_PAGES);
-      onPage?.(rows, result.pagination);
-
-      // A page that comes back empty means the walk is done, whatever the
-      // reported total said.
-      if (result.rows.length === 0) break;
-      if (stopWhen?.(rows)) break;
-      page++;
-    } while (page <= pages && !signal?.aborted);
-  } catch (error) {
-    if ((error as Error)?.name === "AbortError") throw error;
-    // Swallowed on purpose — see the note above.
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
   }
 
-  return rows;
+  const body = await res.json();
+  const rows: T[] = body?.data ?? [];
+  const reported = body?.pagination;
+  const page  = Number(reported?.page)  || query.page  || 1;
+  const limit = Number(reported?.limit) || rows.length;
+  const totalPages = Number(reported?.totalPages) || 1;
+
+  return {
+    rows,
+    pagination: {
+      total: Number(reported?.total) || rows.length,
+      page,
+      limit,
+      totalPages,
+      hasMore: reported?.hasMore ?? page < totalPages,
+    },
+    facets: body?.facets ?? {},
+  };
+}
+
+/** One page's worth of rows, or an empty list if the request fails. */
+export async function fetchRows<T>(
+  collection: string,
+  query: Query = {},
+  signal?: AbortSignal,
+): Promise<T[]> {
+  try {
+    return (await fetchPage<T>(collection, query, signal)).rows;
+  } catch (error) {
+    if ((error as Error)?.name === "AbortError") throw error;
+    return [];
+  }
+}
+
+/**
+ * A single row by slug, or null.
+ *
+ * The endpoint has no by-id route; a one-slug filter is the equivalent and
+ * costs one indexed lookup.
+ */
+export async function fetchBySlug<T>(
+  collection: string,
+  slug: string,
+  signal?: AbortSignal,
+): Promise<T | null> {
+  const rows = await fetchRows<T>(collection, { slug: [slug], limit: 1 }, signal);
+  return rows[0] ?? null;
+}
+
+/**
+ * Rows for a set of slugs, in one request.
+ *
+ * The server accepts up to 50 values at a time, so a long saved cart is split
+ * across a few requests rather than being cut short. Order follows `slugs`, not
+ * the database — a shopper's list should stay in the order they built it.
+ */
+export async function fetchBySlugs<T extends { Slug?: string }>(
+  collection: string,
+  slugs: string[],
+  signal?: AbortSignal,
+): Promise<T[]> {
+  const CHUNK = 50;
+  if (slugs.length === 0) return [];
+
+  const batches: Promise<T[]>[] = [];
+  for (let i = 0; i < slugs.length; i += CHUNK) {
+    const batch = slugs.slice(i, i + CHUNK);
+    batches.push(fetchRows<T>(collection, { slug: batch, limit: MAX_PAGE_SIZE }, signal));
+  }
+
+  const found = new Map<string, T>();
+  for (const rows of await Promise.all(batches)) {
+    for (const row of rows) if (row.Slug) found.set(row.Slug, row);
+  }
+
+  return slugs.map((slug) => found.get(slug)).filter((row): row is T => Boolean(row));
 }

@@ -27,7 +27,7 @@ export interface CheckoutIdentity {
 
 export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
   const { lines, ready, clear } = useCart();
-  const { products, loading }   = useProducts();
+  const { products, loading }   = useProducts(lines.map((line) => line.slug));
 
   const [name,    setName]    = useState(identity.name);
   const [email,   setEmail]   = useState("");

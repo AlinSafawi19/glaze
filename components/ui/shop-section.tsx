@@ -1,78 +1,32 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { categorySlugs, relationSlug, skinTypeSlugs, type Relation, type RawRelations } from "@/lib/relations";
-import { parseStock } from "@/lib/stock";
-import { Filters, type FilterItem } from "./filters";
+import { Filters } from "./filters";
 import { BrandIndex } from "./brand-index";
 import { ProductCard } from "./product-card";
 import { H4, SubtitleMd } from "./typography";
-import { fetchAll, endpoint } from "@/lib/api";
-import { useLoadingGate, whenImagesSettled } from "./loading-gate";
+import { useLoadingGate } from "./loading-gate";
 import { SectionLoading } from "./section-loading";
+import {
+  useBrandIndex,
+  useDebounced,
+  useFilterOptions,
+  useShopProducts,
+} from "./use-shop-data";
 
-const CATEGORIES_URL = endpoint("categories");
-const BRANDS_URL     = endpoint("brands");
-const COLLECTIONS_URL= endpoint("collections");
-const SKIN_TYPES_URL = endpoint("skin-types");
-const PRODUCTS_URL   = endpoint("products");
-
-interface RawProduct extends RawRelations {
-  id:              string;
-  Slug:            string;
-  Title:           string;
-  "Cover img 1":   string;
-  Price:           string;
-  Discount:        string;
-  Brand:           Relation;
-  Collections:     Relation;
-  Stock?:          string;
-}
-
-interface Product {
-  id:          string;
-  slug:        string;
-  title:       string;
-  price:       number;
-  discount:    number;
-  imageSrc:    string;
-  stock:       number | null;
-  /** A product can be filed under several headings at once. */
-  categories:  string[];
-  brand:       string;
-  collections: string;
-  skinTypes:   string[];
-}
-
+/** Products per request. The grid's "load more" asks for the next page. */
 const DESKTOP_PAGE_SIZE = 12;
 const MOBILE_PAGE_SIZE  = 8;
 
-/**
- * A list the dashboard does not have yet just yields no filter — never a dead
- * page. Every page is walked: the endpoint hands back 20 rows unasked, so a
- * shop with more than twenty brands was quietly losing the rest.
- */
-async function fetchFilterItems(url: string, signal?: AbortSignal): Promise<FilterItem[]> {
-  const rows = await fetchAll<{ id: string; Title: string; Slug: string }>(url, { signal });
-  return rows.map((e) => ({ id: e.id, name: e.Title, slug: e.Slug }));
-}
+/** Filter options per request, per group. */
+const OPTIONS_PAGE_SIZE = 8;
 
-function toProduct(e: RawProduct): Product {
-  return {
-    id:          e.id,
-    slug:        e.Slug,
-    title:       e.Title,
-    price:       parseFloat(e.Price)        || 0,
-    discount:    parseFloat(e.Discount)     || 0,
-    imageSrc:    e["Cover img 1"],
-    stock:       parseStock(e.Stock),
-    categories:  categorySlugs(e),
-    brand:       relationSlug(e.Brand),
-    collections: relationSlug(e.Collections),
-    skinTypes:   skinTypeSlugs(e),
-  };
-}
+/** Brand chips per request. */
+const BRAND_PAGE_SIZE = 24;
+
+/** How long typing settles before the shop asks the server for matches. */
+const SEARCH_DEBOUNCE = 300;
 
 /**
  * The one spinner left in the app, and deliberately small: appending the next
@@ -104,48 +58,55 @@ function EmptyState() {
   );
 }
 
-/**
- * Tick the filter box named by a URL param once its list has loaded. Only fires
- * per distinct param value, so the shopper can untick it again and it stays off.
- */
-function useParamSelection(
-  param: string,
-  items: FilterItem[],
-  select: (ids: Set<string>) => void,
-) {
-  const applied = useRef("");
-
-  useEffect(() => {
-    if (!param || items.length === 0) return;
-    if (applied.current === param) return;
-    const match = items.find((i) => i.slug === param);
-    if (!match) return;
-    applied.current = param;
-    select(new Set([match.id]));
-  }, [param, items, select]);
+/** Adds or removes one slug, leaving the rest of the selection alone. */
+function toggled(set: Set<string>, slug: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(slug)) next.delete(slug);
+  else next.add(slug);
+  return next;
 }
 
 export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}) {
-  const [categories,          setCategories]          = useState<FilterItem[]>([]);
-  const [brands,              setBrands]              = useState<FilterItem[]>([]);
-  const [collections,         setCollections]         = useState<FilterItem[]>([]);
-  const [skinTypes,           setSkinTypes]           = useState<FilterItem[]>([]);
-  const [allProducts,         setAllProducts]         = useState<Product[]>([]);
-  const [loading,             setLoading]             = useState(true);
-  const [page,                setPage]                = useState(1);
-  const [appending,           setAppending]           = useState(false);
-  const [isMobile,            setIsMobile]            = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Filter state
+  // Filter state. Slugs throughout: they are what the API filters on, what the
+  // shop's own links carry, and what a deep link can apply before any list has
+  // finished loading.
+  // `/shop-all?collection=<slug>` and `?brand=<slug>` arrive pre-filtered - the
+  // collection strips and the header Brands menu respectively.
+  const searchParams    = useSearchParams();
+  const collectionParam = searchParams.get("collection") ?? "";
+  const brandParam      = searchParams.get("brand") ?? "";
+
   const [searchValue,         setSearchValue]         = useState("");
   const [selectedCategories,  setSelectedCategories]  = useState<Set<string>>(new Set());
-  const [selectedBrands,      setSelectedBrands]      = useState<Set<string>>(new Set());
-  const [selectedCollections, setSelectedCollections] = useState<Set<string>>(new Set());
   const [selectedSkinTypes,   setSelectedSkinTypes]   = useState<Set<string>>(new Set());
 
-  // `/shop-all?collection=<slug>` and `?brand=<slug>` arrive pre-filtered —
-  // the Offers CTA and the header Brands menu respectively.
-  const searchParams = useSearchParams();
+  // A deep link is the opening selection rather than something applied on top of
+  // an empty one: the first render is already filtered, so the shop never shows
+  // an unfiltered page and then swaps it out. Slugs go straight in - unlike the
+  // old id-keyed state, this does not have to wait for a list to load.
+  const [selectedBrands, setSelectedBrands] = useState<Set<string>>(
+    () => new Set(brandParam ? [brandParam] : []),
+  );
+  const [selectedCollections, setSelectedCollections] = useState<Set<string>>(
+    () => new Set(collectionParam ? [collectionParam] : []),
+  );
+
+  // Picking another brand from the header only rewrites the query, with no
+  // remount to pick the new value up - so a later change is applied here, once
+  // per distinct value, leaving the shopper free to untick it again.
+  const [seenBrand, setSeenBrand] = useState(brandParam);
+  if (seenBrand !== brandParam) {
+    setSeenBrand(brandParam);
+    if (brandParam) setSelectedBrands(new Set([brandParam]));
+  }
+
+  const [seenCollection, setSeenCollection] = useState(collectionParam);
+  if (seenCollection !== collectionParam) {
+    setSeenCollection(collectionParam);
+    if (collectionParam) setSelectedCollections(new Set([collectionParam]));
+  }
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 810);
@@ -154,166 +115,45 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  useEffect(() => {
-    const abort = new AbortController();
-    setLoading(true);
-
-    (async () => {
-      // The sidebar first: it is what the shopper reaches for, and the four
-      // lists together are a fraction of the catalogue's weight.
-      const [cats, brnds, cols, skins] = await Promise.all([
-        fetchFilterItems(CATEGORIES_URL,  abort.signal),
-        fetchFilterItems(BRANDS_URL,      abort.signal),
-        fetchFilterItems(COLLECTIONS_URL, abort.signal),
-        fetchFilterItems(SKIN_TYPES_URL,  abort.signal),
-      ]);
-      if (abort.signal.aborted) return;
-      setCategories(cats);
-      setBrands(brnds);
-      setCollections(cols);
-      setSkinTypes(skins);
-
-      // Products arrive a page at a time and are shown as they land, so the
-      // shop opens on its first hundred rather than waiting out a catalogue
-      // that could run to thousands. Only the rows this page added are mapped,
-      // which keeps the walk linear rather than quadratic.
-      const mapped: Product[] = [];
-      await fetchAll<RawProduct>(PRODUCTS_URL, {
-        signal: abort.signal,
-        onPage: (rowsSoFar) => {
-          if (abort.signal.aborted) return;
-          mapped.push(...rowsSoFar.slice(mapped.length).map(toProduct));
-          setAllProducts([...mapped]);
-          setLoading(false);
-        },
-      });
-    })()
-      .catch(() => { /* fetchAll keeps what arrived; nothing to recover here. */ })
-      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
-
-    return () => abort.abort();
-  }, []);
-
-  // The shop is the page — hold the loader up rather than filling the grid with
-  // a spinner.
-  useLoadingGate(loading);
-
-  // Load more: the extra rows are already in memory, so the spinner is really
-  // waiting on their imagery. A short floor keeps it from strobing when the
-  // pictures come straight out of cache.
-  useEffect(() => {
-    if (!appending) return;
-    const abort = new AbortController();
-    Promise.all([
-      whenImagesSettled(abort.signal, 2000),
-      new Promise((r) => setTimeout(r, 350)),
-    ]).then(() => {
-      if (!abort.signal.aborted) setAppending(false);
-    });
-    return () => abort.abort();
-  }, [appending, page]);
-
-  // Build lookup maps: slug â†’ id
-  const categorySlugToId = useMemo(() => {
-    const m: Record<string, string> = {};
-    categories.forEach((c) => { m[c.slug] = c.id; });
-    return m;
-  }, [categories]);
-
-  const brandSlugToId = useMemo(() => {
-    const m: Record<string, string> = {};
-    brands.forEach((b) => { m[b.slug] = b.id; });
-    return m;
-  }, [brands]);
-
-  const collectionSlugToId = useMemo(() => {
-    const m: Record<string, string> = {};
-    collections.forEach((c) => { m[c.slug] = c.id; });
-    return m;
-  }, [collections]);
-
-  const skinTypeSlugToId = useMemo(() => {
-    const m: Record<string, string> = {};
-    skinTypes.forEach((s) => { m[s.slug] = s.id; });
-    return m;
-  }, [skinTypes]);
-
-  useParamSelection(searchParams.get("collection") ?? "", collections, setSelectedCollections);
-  useParamSelection(searchParams.get("brand")      ?? "", brands,      setSelectedBrands);
-
   // The header menu deep-links to `#shop`. This section renders inside Suspense,
-  // so the anchor can be missing when the router first looks for it — and a
+  // so the anchor can be missing when the router first looks for it - and a
   // second pick from the menu is only a query change, with no remount at all.
   useEffect(() => {
     if (window.location.hash !== "#shop") return;
     document.getElementById("shop")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [searchParams]);
 
-  const filtered = useMemo(() => {
-    const q = searchValue.trim().toLowerCase();
-    return allProducts.filter((p) => {
-      if (collectionSlug && p.collections !== collectionSlug) return false;
-      if (q && !p.title.toLowerCase().includes(q)) return false;
-      if (selectedCategories.size > 0) {
-        // A product qualifies on any one of the categories it is filed under.
-        const ids = p.categories.map((c) => categorySlugToId[c]).filter(Boolean);
-        if (!ids.some((id) => selectedCategories.has(id))) return false;
-      }
-      if (selectedBrands.size > 0) {
-        const brandId = brandSlugToId[p.brand];
-        if (!brandId || !selectedBrands.has(brandId)) return false;
-      }
-      if (selectedCollections.size > 0) {
-        const colId = collectionSlugToId[p.collections];
-        if (!colId || !selectedCollections.has(colId)) return false;
-      }
-      if (selectedSkinTypes.size > 0) {
-        // A product qualifies on any one of the skin types it is tagged with.
-        const ids = p.skinTypes.map((s) => skinTypeSlugToId[s]).filter(Boolean);
-        if (!ids.some((id) => selectedSkinTypes.has(id))) return false;
-      }
-      return true;
-    });
-  }, [allProducts, collectionSlug, searchValue, selectedCategories, selectedBrands, selectedCollections, selectedSkinTypes, categorySlugToId, brandSlugToId, collectionSlugToId, skinTypeSlugToId]);
+  const categories  = useFilterOptions("categories",  OPTIONS_PAGE_SIZE);
+  const collections = useFilterOptions("collections", OPTIONS_PAGE_SIZE);
+  const skinTypes   = useFilterOptions("skin-types",  OPTIONS_PAGE_SIZE);
+  const brandIndex  = useBrandIndex(BRAND_PAGE_SIZE);
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [searchValue, selectedCategories, selectedBrands, selectedCollections, selectedSkinTypes]);
+  const search   = useDebounced(searchValue, SEARCH_DEBOUNCE);
+  const pageSize = isMobile ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
 
-  const pageSize  = isMobile ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
-  const paginated = filtered.slice(0, page * pageSize);
-  const hasMore   = filtered.length > page * pageSize;
+  // A page pinned to one collection narrows to it outright; elsewhere the
+  // shopper's own picks decide.
+  const collectionFilter = useMemo(
+    () => (collectionSlug ? [collectionSlug] : [...selectedCollections]),
+    [collectionSlug, selectedCollections],
+  );
 
-  function handleCategoryToggle(id: string) {
-    setSelectedCategories((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
+  const filters = useMemo(
+    () => ({
+      search,
+      categories:  [...selectedCategories],
+      brands:      [...selectedBrands],
+      collections: collectionFilter,
+      skinTypes:   [...selectedSkinTypes],
+    }),
+    [search, selectedCategories, selectedBrands, collectionFilter, selectedSkinTypes],
+  );
 
-  function handleBrandToggle(id: string) {
-    setSelectedBrands((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
+  const products = useShopProducts(filters, pageSize);
 
-  function handleCollectionToggle(id: string) {
-    setSelectedCollections((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  function handleSkinTypeToggle(id: string) {
-    setSelectedSkinTypes((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
+  // The shop is the page - hold the loader up rather than filling the grid with
+  // a spinner. First page only: later ones append under a nudge of their own.
+  useLoadingGate(products.loading);
 
   function handleClear() {
     setSearchValue("");
@@ -333,14 +173,12 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
         desktop:pt-[64px] desktop:px-[32px] desktop:pb-[80px]">
 
         {/* Brands — an A–Z index above the shop, not a sidebar checkbox list */}
-        {!loading && (
-          <BrandIndex
-            brands={brands}
-            selected={selectedBrands}
-            onToggle={handleBrandToggle}
-            onClear={() => setSelectedBrands(new Set())}
-          />
-        )}
+        <BrandIndex
+          data={brandIndex}
+          selected={selectedBrands}
+          onToggle={(slug) => setSelectedBrands((prev) => toggled(prev, slug))}
+          onClear={() => setSelectedBrands(new Set())}
+        />
 
         {/* Title wrapper */}
         <div className="w-full flex flex-row justify-start items-center gap-[16px] p-0 overflow-visible rounded-none">
@@ -358,17 +196,17 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
             <Filters
               categories={categories}
               collections={collections}
+              skinTypes={skinTypes}
               searchValue={searchValue}
               onSearchChange={setSearchValue}
               selectedCategories={selectedCategories}
-              onCategoryToggle={handleCategoryToggle}
+              onCategoryToggle={(slug) => setSelectedCategories((prev) => toggled(prev, slug))}
               onCategoryAll={() => setSelectedCategories(new Set())}
               selectedCollections={selectedCollections}
-              onCollectionToggle={handleCollectionToggle}
+              onCollectionToggle={(slug) => setSelectedCollections((prev) => toggled(prev, slug))}
               onCollectionAll={() => setSelectedCollections(new Set())}
-              skinTypes={skinTypes}
               selectedSkinTypes={selectedSkinTypes}
-              onSkinTypeToggle={handleSkinTypeToggle}
+              onSkinTypeToggle={(slug) => setSelectedSkinTypes((prev) => toggled(prev, slug))}
               onSkinTypeAll={() => setSelectedSkinTypes(new Set())}
               onClear={handleClear}
             />
@@ -377,14 +215,14 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
           {/* Products area */}
           <div className="flex-1 flex flex-col gap-[40px] w-full">
 
-            {loading ? <SectionLoading /> : filtered.length === 0 ? (
+            {products.loading ? <SectionLoading /> : products.items.length === 0 ? (
               <EmptyState />
             ) : (
               <div className="grid
                 grid-cols-1 gap-x-[16px] gap-y-[48px]
                 tablet:grid-cols-2 tablet:gap-y-[40px]
                 desktop:grid-cols-3 desktop:gap-y-[48px]">
-                {paginated.map((product) => (
+                {products.items.map((product) => (
                   <ProductCard
                     key={product.id}
                     title={product.title}
@@ -400,14 +238,14 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
               </div>
             )}
 
-            {/* Load more */}
-            {hasMore && !loading && (
+            {/* Load more — the next page of the current selection, from the server */}
+            {products.hasMore && !products.loading && (
               <div className="w-full flex justify-center">
-                {appending ? (
+                {products.loadingMore ? (
                   <PaginationSpinner />
                 ) : (
                   <button
-                    onClick={() => { setAppending(true); setPage((p) => p + 1); }}
+                    onClick={products.loadMore}
                     className="font-clash font-medium clash-features uppercase text-brown text-[14px] leading-[1.4] border border-dashed border-beige px-[32px] py-[12px] rounded-none bg-transparent cursor-pointer"
                     style={{ transition: "border-color 0.3s cubic-bezier(0.44,0,0.56,1)" }}
                   >

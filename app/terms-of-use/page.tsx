@@ -4,9 +4,7 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 
-import { fetchAll, endpoint } from "@/lib/api";
-
-const UTILITY_URL = endpoint("utility-pages");
+import { fetchBySlug } from "@/lib/api";
 const SPRING = { type: "spring" as const, duration: 0.6, bounce: 0, delay: 0 };
 
 export default function TermsOfUse() {
@@ -15,16 +13,13 @@ export default function TermsOfUse() {
   useEffect(() => {
     const abort = new AbortController();
 
-    fetchAll<{ Slug: string; Content?: string }>(UTILITY_URL, {
-      signal: abort.signal,
-      // The page wanted is usually on the first response; there is no reason to
-      // keep walking once it has been seen.
-      stopWhen: (rows) => rows.some((e) => e.Slug === "terms-of-use"),
-    }).then((rows) => {
-      if (abort.signal.aborted) return;
-      const entry = rows.find((e) => e.Slug === "terms-of-use");
-      if (entry) setContent(entry.Content ?? "");
-    });
+    // One row, looked up by name - no reason to read the list to find it.
+    fetchBySlug<{ Content?: string }>("utility-pages", "terms-of-use", abort.signal)
+      .then((entry) => {
+        if (abort.signal.aborted || !entry) return;
+        setContent(entry.Content ?? "");
+      })
+      .catch(() => { /* the page simply stays empty */ });
 
     return () => abort.abort();
   }, []);

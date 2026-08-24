@@ -9,8 +9,9 @@ import { ButtonSm, BodySm } from "./typography";
 import { Logomark } from "./logomark";
 import { useWishlist } from "./use-wishlist";
 import { useCart } from "./use-cart";
-import { useBrands, type Brand } from "./use-brands";
-import { usePagedList, PagedListControls } from "./paged-list";
+import { PagedListControls } from "./paged-list";
+import { useFilterOptions, type PagedList } from "./use-shop-data";
+import type { FilterItem } from "./filters";
 import { useScrollLock } from "./use-scroll-lock";
 
 const EASE   = [0.44, 0, 0.56, 1] as const;
@@ -71,9 +72,15 @@ function NavLink({ title, href, active }: { title: string; href: string; active:
  * Brands nav item — the label opens a panel of brands instead of navigating,
  * on every breakpoint. "All brands" inside the panel keeps the shop reachable.
  */
-function BrandsNavItem({ title, active }: { title: string; active: boolean }) {
-  const { brands, loading } = useBrands();
-  const paged = usePagedList(brands, BRAND_MENU_PAGE_SIZE);
+function BrandsNavItem({
+  title,
+  active,
+  brands,
+}: {
+  title:  string;
+  active: boolean;
+  brands: PagedList<FilterItem>;
+}) {
   const pathname = usePathname();
   const [open,    setOpen]    = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -152,7 +159,7 @@ function BrandsNavItem({ title, active }: { title: string; active: boolean }) {
           >
             <div className="min-w-[220px] max-h-[60vh] overflow-y-auto flex flex-col justify-start items-stretch gap-[2px] bg-lavender border border-dashed border-beige rounded-none p-[8px]">
               <BrandMenuLink href={brandHref()} label="All brands" onNavigate={() => setOpen(false)} />
-              {paged.visible.map((brand) => (
+              {brands.items.map((brand) => (
                 <BrandMenuLink
                   key={brand.id}
                   href={brandHref(brand.slug)}
@@ -161,17 +168,17 @@ function BrandsNavItem({ title, active }: { title: string; active: boolean }) {
                 />
               ))}
               {/* The panel scrolls, but a shop with a hundred brands should not
-                  make the shopper drag through all of them to reach the end. */}
+                  make the shopper drag through all of them to reach the end -
+                  and the ones past this page have not been fetched anyway. */}
               <PagedListControls
-                remaining={paged.remaining}
-                expanded={paged.expanded}
-                onMore={paged.showMore}
-                onLess={paged.showLess}
+                remaining={brands.total - brands.items.length}
+                busy={brands.loadingMore}
+                onMore={brands.loadMore}
                 className="px-[10px] pb-[4px]"
               />
               {/* Only while the request is in flight — a list that comes back empty
                   leaves "All brands" standing on its own rather than a stuck spinner. */}
-              {loading && (
+              {brands.loading && (
                 <BodySm className="!text-brown !text-left px-[10px] py-[8px]">Loading…</BodySm>
               )}
             </div>
@@ -335,11 +342,10 @@ function BrandsDrawerItem({
 }: {
   title:      string;
   active:     boolean;
-  brands:     Brand[];
+  brands:     PagedList<FilterItem>;
   onNavigate: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const paged = usePagedList(brands, BRAND_MENU_PAGE_SIZE);
 
   return (
     <div className="w-full flex flex-col justify-start items-start gap-[12px]">
@@ -377,16 +383,15 @@ function BrandsDrawerItem({
               <Link href={brandHref()} onClick={onNavigate} className="w-full">
                 <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">All brands</ButtonSm>
               </Link>
-              {paged.visible.map((brand) => (
+              {brands.items.map((brand) => (
                 <Link key={brand.id} href={brandHref(brand.slug)} onClick={onNavigate} className="w-full">
                   <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">{brand.name}</ButtonSm>
                 </Link>
               ))}
               <PagedListControls
-                remaining={paged.remaining}
-                expanded={paged.expanded}
-                onMore={paged.showMore}
-                onLess={paged.showLess}
+                remaining={brands.total - brands.items.length}
+                busy={brands.loadingMore}
+                onMore={brands.loadMore}
               />
             </div>
           </motion.div>
@@ -398,7 +403,9 @@ function BrandsDrawerItem({
 
 export function Header() {
   const pathname = usePathname();
-  const { brands } = useBrands();
+  // One request for the whole header: the desktop panel and the drawer render
+  // the same list, so they share the same page of it.
+  const brands = useFilterOptions("brands", BRAND_MENU_PAGE_SIZE);
   const [open,     setOpen]     = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -469,7 +476,7 @@ export function Header() {
           <nav className="hidden tablet:flex absolute left-1/2 -translate-x-1/2 flex-row items-center gap-[8px] desktop:gap-[16px]">
             {NAV.map(({ title, href, submenu }) =>
               submenu ? (
-                <BrandsNavItem key={href} title={title} active={isActive(href)} />
+                <BrandsNavItem key={href} title={title} active={isActive(href)} brands={brands} />
               ) : (
                 <NavLink key={href} title={title} href={href} active={isActive(href)} />
               )

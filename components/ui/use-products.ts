@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { fetchAll, endpoint } from "@/lib/api";
+import { fetchBySlugs } from "@/lib/api";
 import { parseStock } from "@/lib/stock";
-
-const PRODUCTS_URL = endpoint("products");
 
 interface RawEntry {
   id:            string;
@@ -30,18 +28,37 @@ export interface CatalogProduct {
   stock:      number | null;
 }
 
-/** Whole catalogue, used by the cart and checkout to resolve stored slugs. */
-export function useProducts() {
+/**
+ * The products behind a set of saved slugs - a cart, a checkout, a wishlist.
+ *
+ * Asks for exactly those rows rather than reading the catalogue and searching
+ * it: a basket of three is three rows over the wire however large the shop
+ * grows, and a slug is never missed for having fallen past a page boundary.
+ */
+export function useProducts(slugs: string[]) {
+  // The slugs come from a list that is rebuilt on every render, so the request
+  // keys off their values rather than the array's identity.
+  const key = slugs.join(",");
+
   const [products, setProducts] = useState<CatalogProduct[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  // An empty basket has nothing to wait for, so it is settled from the start.
+  const [loading,  setLoading]  = useState(() => key !== "");
+
+  // Reacting in render rather than in the effect: an emptied basket is resolved
+  // without a request at all, and a changed one reads as loading immediately.
+  const [sent, setSent] = useState(key);
+  if (sent !== key) {
+    setSent(key);
+    setLoading(key !== "");
+    if (key === "") setProducts([]);
+  }
 
   useEffect(() => {
+    if (key === "") return;
+
     const abort = new AbortController();
 
-    // Every page: the cart and the wishlist resolve stored slugs against this,
-    // and a slug that fell past the first page would read as a vanished
-    // product rather than one further down the catalogue.
-    fetchAll<RawEntry>(PRODUCTS_URL, { signal: abort.signal })
+    fetchBySlugs<RawEntry & { Slug: string }>("products", key.split(","), abort.signal)
       .then((entries) => {
         if (abort.signal.aborted) return;
         setProducts(
@@ -66,7 +83,7 @@ export function useProducts() {
       .finally(() => { if (!abort.signal.aborted) setLoading(false); });
 
     return () => abort.abort();
-  }, []);
+  }, [key]);
 
   return { products, loading };
 }

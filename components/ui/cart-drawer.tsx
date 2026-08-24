@@ -21,7 +21,7 @@ const FADE  = { duration: 0.35, ease: [0.32, 0.72, 0, 1] as [number, number, num
 export function CartDrawer() {
   const { open, setOpen } = useCartDrawer();
   const { lines, setQty, remove } = useCart();
-  const { products } = useProducts();
+  const { products } = useProducts(lines.map((line) => line.slug));
   const pathname = usePathname();
 
   useScrollLock(open);
