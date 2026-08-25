@@ -404,8 +404,10 @@ function BrandsDrawerItem({
 export function Header() {
   const pathname = usePathname();
   // One request for the whole header: the desktop panel and the drawer render
-  // the same list, so they share the same page of it.
-  const brands = useFilterOptions("brands", BRAND_MENU_PAGE_SIZE);
+  // the same list, so they share the same page of it. Sorted by name to match
+  // the shop's A–Z index — the same ten brands in two orders reads as two
+  // different lists.
+  const brands = useFilterOptions("brands", BRAND_MENU_PAGE_SIZE, "name");
   const [open,     setOpen]     = useState(false);
   const [scrolled, setScrolled] = useState(false);
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Filters } from "./filters";
 import { BrandIndex } from "./brand-index";
 import { ProductCard } from "./product-card";
@@ -10,6 +10,7 @@ import { useLoadingGate } from "./loading-gate";
 import { SectionLoading } from "./section-loading";
 import {
   useBrandIndex,
+  useBrandsBySlug,
   useDebounced,
   useFilterOptions,
   useShopProducts,
@@ -22,11 +23,18 @@ const MOBILE_PAGE_SIZE  = 8;
 /** Filter options per request, per group. */
 const OPTIONS_PAGE_SIZE = 8;
 
-/** Brand chips per request. */
-const BRAND_PAGE_SIZE = 24;
+/** Brand chips per request. Fewer on a phone, where the strip stands between
+ *  the shopper and the first product. */
+const BRAND_PAGE_SIZE        = 24;
+const MOBILE_BRAND_PAGE_SIZE = 12;
 
 /** How long typing settles before the shop asks the server for matches. */
 const SEARCH_DEBOUNCE = 300;
+
+/** How long a run of chip clicks settles before the grid asks for matches. */
+const FILTER_SETTLE = 180;
+
+const EASE = "cubic-bezier(0.44, 0, 0.56, 1)";
 
 /**
  * The one spinner left in the app, and deliberately small: appending the next
@@ -66,47 +74,93 @@ function toggled(set: Set<string>, slug: string): Set<string> {
   return next;
 }
 
+/** `?brand=a,b` — the comma-joined spelling the API already takes for lists. */
+function splitParam(value: string): string[] {
+  return value.split(",").map((slug) => slug.trim()).filter(Boolean);
+}
+
+/**
+ * A selection that lives in the query string.
+ *
+ * The catch with holding it there rather than in state is that `router.replace`
+ * lands a tick or two after the click, so a second chip ticked before the query
+ * catches up would be toggling against the selection as it stood before the
+ * first — and the first pick would vanish. The set last written stands in until
+ * `?key=` reflects it, which is what makes ticking four brands quickly add four
+ * brands.
+ */
+function useParamSet(
+  key:   string,
+  raw:   string,
+  write: (key: string, values: string[]) => void,
+) {
+  const selected = useMemo(() => new Set(splitParam(raw)), [raw]);
+  const pending  = useRef<{ seen: string; set: Set<string> } | null>(null);
+
+  const commit = useCallback(
+    (next: Set<string>) => {
+      pending.current = { seen: raw, set: next };
+      write(key, [...next]);
+    },
+    [key, raw, write],
+  );
+
+  const toggle = useCallback(
+    (slug: string) => {
+      const held = pending.current;
+      const base = held && held.seen === raw ? held.set : selected;
+      commit(toggled(base, slug));
+    },
+    [commit, raw, selected],
+  );
+
+  const clear = useCallback(() => commit(new Set()), [commit]);
+
+  return { selected, toggle, clear, commit };
+}
+
 export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}) {
   const [isMobile, setIsMobile] = useState(false);
 
   // Filter state. Slugs throughout: they are what the API filters on, what the
   // shop's own links carry, and what a deep link can apply before any list has
   // finished loading.
-  // `/shop-all?collection=<slug>` and `?brand=<slug>` arrive pre-filtered - the
-  // collection strips and the header Brands menu respectively.
-  const searchParams    = useSearchParams();
+  const router       = useRouter();
+  const pathname     = usePathname();
+  const searchParams = useSearchParams();
+
   const collectionParam = searchParams.get("collection") ?? "";
   const brandParam      = searchParams.get("brand") ?? "";
 
-  const [searchValue,         setSearchValue]         = useState("");
-  const [selectedCategories,  setSelectedCategories]  = useState<Set<string>>(new Set());
-  const [selectedSkinTypes,   setSelectedSkinTypes]   = useState<Set<string>>(new Set());
+  const [searchValue,        setSearchValue]        = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedSkinTypes,  setSelectedSkinTypes]  = useState<Set<string>>(new Set());
 
-  // A deep link is the opening selection rather than something applied on top of
-  // an empty one: the first render is already filtered, so the shop never shows
-  // an unfiltered page and then swaps it out. Slugs go straight in - unlike the
-  // old id-keyed state, this does not have to wait for a list to load.
-  const [selectedBrands, setSelectedBrands] = useState<Set<string>>(
-    () => new Set(brandParam ? [brandParam] : []),
+  const setParam = useCallback(
+    (key: string, values: string[]) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (values.length > 0) params.set(key, values.join(","));
+      else params.delete(key);
+
+      const query = params.toString();
+      // `replace`, not `push`: ticking five brands should not cost five presses
+      // of the back button to get out of the shop. `scroll: false` because the
+      // shopper is mid-page and the selection is not a new page.
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams],
   );
-  const [selectedCollections, setSelectedCollections] = useState<Set<string>>(
-    () => new Set(collectionParam ? [collectionParam] : []),
-  );
 
-  // Picking another brand from the header only rewrites the query, with no
-  // remount to pick the new value up - so a later change is applied here, once
-  // per distinct value, leaving the shopper free to untick it again.
-  const [seenBrand, setSeenBrand] = useState(brandParam);
-  if (seenBrand !== brandParam) {
-    setSeenBrand(brandParam);
-    if (brandParam) setSelectedBrands(new Set([brandParam]));
-  }
+  // `?brand=` and `?collection=` *are* the selection rather than a seed for one.
+  // Reading them straight through means the first render is already filtered, a
+  // refresh or a shared link lands on the shop the shopper was looking at, and
+  // picking the same brand from the header twice is no longer a dead click
+  // against a value that never changed.
+  const brandPicks      = useParamSet("brand",      brandParam,      setParam);
+  const collectionPicks = useParamSet("collection", collectionParam, setParam);
 
-  const [seenCollection, setSeenCollection] = useState(collectionParam);
-  if (seenCollection !== collectionParam) {
-    setSeenCollection(collectionParam);
-    if (collectionParam) setSelectedCollections(new Set([collectionParam]));
-  }
+  const selectedBrands      = brandPicks.selected;
+  const selectedCollections = collectionPicks.selected;
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 810);
@@ -115,18 +169,40 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  const brandSlugs  = useMemo(() => [...selectedBrands], [selectedBrands]);
+  const brandLookup = useBrandsBySlug(brandSlugs);
+
+  // A slug with no brand behind it filters every product out and shows as a
+  // count with nothing under it. Once the server has actually answered for it -
+  // a lookup that merely failed says nothing - drop it, so a stale link opens
+  // the shop rather than an empty grid the shopper cannot account for.
+  useEffect(() => {
+    if (brandLookup.unknown.length === 0) return;
+    const bad  = new Set(brandLookup.unknown);
+    const keep = brandSlugs.filter((slug) => !bad.has(slug));
+    // Nothing left to drop: stop, rather than rewriting the same query forever.
+    if (keep.length === brandSlugs.length) return;
+    brandPicks.commit(new Set(keep));
+  }, [brandLookup.unknown, brandSlugs, brandPicks]);
+
   // The header menu deep-links to `#shop`. This section renders inside Suspense,
   // so the anchor can be missing when the router first looks for it - and a
   // second pick from the menu is only a query change, with no remount at all.
+  //
+  // A brand picked from the menu is about the products it filtered, so that
+  // lands on the grid rather than on the wall of chips it was picked from. The
+  // chip toggles below rewrite the query without the hash, which is what keeps
+  // this from firing again on every tick.
   useEffect(() => {
     if (window.location.hash !== "#shop") return;
-    document.getElementById("shop")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [searchParams]);
+    const target = brandParam ? "products" : "shop";
+    document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [searchParams, brandParam]);
 
   const categories  = useFilterOptions("categories",  OPTIONS_PAGE_SIZE);
   const collections = useFilterOptions("collections", OPTIONS_PAGE_SIZE);
   const skinTypes   = useFilterOptions("skin-types",  OPTIONS_PAGE_SIZE);
-  const brandIndex  = useBrandIndex(BRAND_PAGE_SIZE);
+  const brandIndex  = useBrandIndex(isMobile ? MOBILE_BRAND_PAGE_SIZE : BRAND_PAGE_SIZE);
 
   const search   = useDebounced(searchValue, SEARCH_DEBOUNCE);
   const pageSize = isMobile ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
@@ -138,29 +214,37 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
     [collectionSlug, selectedCollections],
   );
 
-  const filters = useMemo(
+  // Ticking is faster than fetching: letting a run of picks settle turns four
+  // clicks into one request rather than three that are aborted on the way out.
+  const picks = useMemo(
     () => ({
-      search,
       categories:  [...selectedCategories],
-      brands:      [...selectedBrands],
+      brands:      brandSlugs,
       collections: collectionFilter,
       skinTypes:   [...selectedSkinTypes],
     }),
-    [search, selectedCategories, selectedBrands, collectionFilter, selectedSkinTypes],
+    [selectedCategories, brandSlugs, collectionFilter, selectedSkinTypes],
   );
+
+  const settled = useDebounced(picks, FILTER_SETTLE);
+
+  const filters = useMemo(() => ({ search, ...settled }), [search, settled]);
 
   const products = useShopProducts(filters, pageSize);
 
   // The shop is the page - hold the loader up rather than filling the grid with
-  // a spinner. First page only: later ones append under a nudge of their own.
+  // a spinner. Only while there is nothing to show: a filter change over a grid
+  // already on screen is a refresh, and dims in place.
   useLoadingGate(products.loading);
 
+  // The panel's own groups, and only those. Brands are picked above the shop and
+  // cleared there - a button in the sidebar reaching up to deselect chips in
+  // another part of the page was the surprise, not the convenience.
   function handleClear() {
     setSearchValue("");
     setSelectedCategories(new Set());
-    setSelectedBrands(new Set());
-    setSelectedCollections(new Set());
     setSelectedSkinTypes(new Set());
+    collectionPicks.clear();
   }
 
   return (
@@ -176,8 +260,9 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
         <BrandIndex
           data={brandIndex}
           selected={selectedBrands}
-          onToggle={(slug) => setSelectedBrands((prev) => toggled(prev, slug))}
-          onClear={() => setSelectedBrands(new Set())}
+          selectedItems={brandLookup.items}
+          onToggle={brandPicks.toggle}
+          onClear={brandPicks.clear}
         />
 
         {/* Title wrapper */}
@@ -203,8 +288,8 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
               onCategoryToggle={(slug) => setSelectedCategories((prev) => toggled(prev, slug))}
               onCategoryAll={() => setSelectedCategories(new Set())}
               selectedCollections={selectedCollections}
-              onCollectionToggle={(slug) => setSelectedCollections((prev) => toggled(prev, slug))}
-              onCollectionAll={() => setSelectedCollections(new Set())}
+              onCollectionToggle={collectionPicks.toggle}
+              onCollectionAll={collectionPicks.clear}
               selectedSkinTypes={selectedSkinTypes}
               onSkinTypeToggle={(slug) => setSelectedSkinTypes((prev) => toggled(prev, slug))}
               onSkinTypeAll={() => setSelectedSkinTypes(new Set())}
@@ -212,13 +297,23 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
             />
           </div>
 
-          {/* Products area */}
-          <div className="flex-1 flex flex-col gap-[40px] w-full">
+          {/* Products area — its own anchor, so a brand picked from the header
+              lands on what it filtered rather than on the index above. */}
+          <div
+            id="products"
+            className="flex-1 flex flex-col gap-[40px] w-full scroll-mt-[60px] tablet:scroll-mt-[68px] desktop:scroll-mt-[72px]"
+          >
 
             {products.loading ? <SectionLoading /> : products.items.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="grid
+              <div
+                aria-busy={products.refreshing}
+                // A filter change dims the grid it is about to replace rather
+                // than tearing it down for half a screen of wordmark: the
+                // shopper keeps their place, and the page keeps its height.
+                style={{ opacity: products.refreshing ? 0.45 : 1, transition: `opacity 0.3s ${EASE}` }}
+                className="grid
                 grid-cols-1 gap-x-[16px] gap-y-[48px]
                 tablet:grid-cols-2 tablet:gap-y-[40px]
                 desktop:grid-cols-3 desktop:gap-y-[48px]">

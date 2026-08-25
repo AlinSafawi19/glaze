@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { fetchPage, NON_ALPHA, type Query } from "@/lib/api";
+import { fetchPage, MAX_PAGE_SIZE, NON_ALPHA, type Query, type Sort } from "@/lib/api";
 import { categorySlugs, relationSlug, skinTypeSlugs, type Relation, type RawRelations } from "@/lib/relations";
 import { parseStock } from "@/lib/stock";
 import type { FilterItem } from "./filters";
@@ -46,8 +46,14 @@ export interface PagedList<T> {
   /** Rows the server holds in total, not the number loaded so far. */
   total:   number;
   hasMore: boolean;
-  /** The first page is still in flight — there is nothing to show yet. */
+  /** There is nothing to show yet — the first page has never arrived. */
   loading: boolean;
+  /**
+   * A fresh first page is in flight while the last one's rows are still on
+   * screen. What is showing is stale rather than absent, so it is worth keeping
+   * up and marking busy instead of tearing it down for a spinner.
+   */
+  refreshing: boolean;
   /** A later page is in flight — what is on screen stays put. */
   loadingMore: boolean;
   loadMore: () => void;
@@ -59,9 +65,11 @@ export interface PagedList<T> {
  * One filter group's options.
  *
  * Ordering is left to the dashboard, which sorts these lists by hand — asking
- * for them alphabetically here would quietly override the shop's own arrangement.
+ * for them alphabetically here would quietly override the shop's own
+ * arrangement. `sort` is for the lists where that does not hold: a roster the
+ * shopper scans by name, like brands, reads as broken in curation order.
  */
-export function useFilterOptions(collection: string, pageSize: number): PagedList<FilterItem> {
+export function useFilterOptions(collection: string, pageSize: number, sort?: Sort): PagedList<FilterItem> {
   const [items,   setItems]   = useState<FilterItem[]>([]);
   const [page,    setPage]    = useState(1);
   const [total,   setTotal]   = useState(0);
@@ -71,7 +79,7 @@ export function useFilterOptions(collection: string, pageSize: number): PagedLis
   // Marked busy in the render that changes the request, not in the effect that
   // sends it: the control has to read as pressed on the frame it was pressed,
   // and a state write inside an effect is a second render either way.
-  const request = `${collection}|${page}|${pageSize}`;
+  const request = `${collection}|${page}|${pageSize}|${sort ?? ""}`;
   const [sent, setSent] = useState(request);
   if (sent !== request) {
     setSent(request);
@@ -81,7 +89,10 @@ export function useFilterOptions(collection: string, pageSize: number): PagedLis
   useEffect(() => {
     const abort = new AbortController();
 
-    fetchPage<RawTaxonomy>(collection, { page, limit: pageSize }, abort.signal)
+    const query: Query = { page, limit: pageSize };
+    if (sort) query.sort = sort;
+
+    fetchPage<RawTaxonomy>(collection, query, abort.signal)
       .then(({ rows, pagination }) => {
         if (abort.signal.aborted) return;
         const mapped = rows.map(toFilterItem);
@@ -95,7 +106,7 @@ export function useFilterOptions(collection: string, pageSize: number): PagedLis
       .finally(() => { if (!abort.signal.aborted) setBusy(false); });
 
     return () => abort.abort();
-  }, [collection, page, pageSize]);
+  }, [collection, page, pageSize, sort]);
 
   const loadMore = useCallback(() => {
     if (!busy && hasMore) setPage((p) => p + 1);
@@ -106,7 +117,10 @@ export function useFilterOptions(collection: string, pageSize: number): PagedLis
     total,
     hasMore,
     loading:     busy && items.length === 0,
-    loadingMore: busy && items.length > 0,
+    refreshing:  busy && page === 1 && items.length > 0,
+    // Keyed on the page being asked for, not on whether anything is on screen —
+    // a first page fetched over stale rows is a refresh, not an append.
+    loadingMore: busy && page > 1,
     loadMore,
   };
 }
@@ -115,6 +129,26 @@ export function useFilterOptions(collection: string, pageSize: number): PagedLis
 
 /** The A–Z index's "no letter picked" state. */
 export const ALL_LETTERS = "ALL";
+
+/** The server takes this many slugs per request; a longer list is split. */
+const SLUG_CHUNK = 50;
+
+/** Shared, so an empty result keeps its identity and does not re-render on every pass. */
+const NO_SLUGS: string[] = [];
+
+/**
+ * Brand rows seen anywhere this session, keyed by slug.
+ *
+ * The shop has to name brands it is not currently listing — one picked under K
+ * while M is on screen, or one arriving in a link — and a name is fixed for as
+ * long as the tab is open. Holding them here means a pinned chip costs a lookup
+ * once rather than on every letter change.
+ */
+const brandNames = new Map<string, FilterItem>();
+
+function rememberBrands(items: FilterItem[]) {
+  for (const item of items) brandNames.set(item.slug, item);
+}
 
 export interface BrandIndexData extends PagedList<FilterItem> {
   /** Letter currently being browsed, or {@link ALL_LETTERS}. */
@@ -132,6 +166,9 @@ export interface BrandIndexData extends PagedList<FilterItem> {
  * initials comes back as a facet on the first request — the index has to keep
  * offering the other letters once one has been picked, so it cannot be derived
  * from the rows in hand.
+ *
+ * Sorted by name: an index headed A–Z that lists its brands in the dashboard's
+ * hand-sorted order reads as though the letters do nothing.
  */
 export function useBrandIndex(pageSize: number): BrandIndexData {
   const [letter,   setLetter]   = useState(ALL_LETTERS);
@@ -164,7 +201,7 @@ export function useBrandIndex(pageSize: number): BrandIndexData {
   useEffect(() => {
     const abort = new AbortController();
 
-    const query: Query = { page, limit: pageSize };
+    const query: Query = { page, limit: pageSize, sort: "name" };
     if (letter !== ALL_LETTERS) query.startsWith = letter;
     if (!haveInitials.current) query.facets = ["initials"];
 
@@ -172,6 +209,7 @@ export function useBrandIndex(pageSize: number): BrandIndexData {
       .then(({ rows, pagination, facets }) => {
         if (abort.signal.aborted) return;
         const mapped = rows.map(toFilterItem);
+        rememberBrands(mapped);
         setItems((prev) => (page === 1 ? mapped : [...prev, ...mapped]));
         setTotal(pagination.total);
         setHasMore(pagination.hasMore);
@@ -195,12 +233,102 @@ export function useBrandIndex(pageSize: number): BrandIndexData {
     total,
     hasMore,
     loading:     busy && items.length === 0,
-    loadingMore: busy && items.length > 0,
+    // A letter change keeps the previous letter's chips up until the new ones
+    // land, so the strip has to say it is busy - otherwise it sits there
+    // showing the wrong letter's brands as though they were the answer.
+    refreshing:  busy && page === 1 && items.length > 0,
+    loadingMore: busy && page > 1,
     loadMore,
     letter,
     setLetter,
     initials,
   };
+}
+
+export interface BrandLookup {
+  /** The named brands behind the given slugs, in the order asked for. */
+  items:   FilterItem[];
+  /** Slugs the server answered for and had no brand under. */
+  unknown: string[];
+  loading: boolean;
+}
+
+/**
+ * Names for a set of brand slugs, whatever letter they live under.
+ *
+ * A selection is slugs, and a slug is not something to show a shopper — so the
+ * shop resolves the ones it cannot already name. Only slugs missing from the
+ * session's cache are asked for, which in practice means the ones that arrived
+ * in a link rather than the ones just clicked.
+ *
+ * `unknown` is reported only for a request that actually came back: a lookup
+ * that fails says nothing about whether a slug is real, and treating a network
+ * blip as "no such brand" would quietly wipe the shopper's selection.
+ */
+export function useBrandsBySlug(slugs: string[]): BrandLookup {
+  const key = slugs.join(",");
+
+  /** Only slugs this session has never named cost a request. */
+  const anyMissing = (list: string) =>
+    (list ? list.split(",") : []).some((slug) => !brandNames.has(slug));
+
+  const [unknown, setUnknown] = useState<string[]>(NO_SLUGS);
+  const [busy,    setBusy]    = useState(() => anyMissing(key));
+  // Bumped once a fetch has written names into the shared cache, so the list
+  // below recomputes against a key that has not itself changed.
+  const [resolved, setResolved] = useState(0);
+
+  // Adjusted during render rather than in the effect, the same way the paged
+  // hooks above do it: a new selection is a new question, and last question's
+  // answer must not outlive it for a frame.
+  const [sent, setSent] = useState(key);
+  if (sent !== key) {
+    setSent(key);
+    setUnknown(NO_SLUGS);
+    setBusy(anyMissing(key));
+  }
+
+  useEffect(() => {
+    const wanted  = key ? key.split(",") : [];
+    const missing = wanted.filter((slug) => !brandNames.has(slug));
+    if (missing.length === 0) return;
+
+    const abort = new AbortController();
+
+    (async () => {
+      const found: FilterItem[] = [];
+      for (let i = 0; i < missing.length; i += SLUG_CHUNK) {
+        const { rows } = await fetchPage<RawTaxonomy>(
+          "brands",
+          { slug: missing.slice(i, i + SLUG_CHUNK), limit: MAX_PAGE_SIZE },
+          abort.signal,
+        );
+        found.push(...rows.map(toFilterItem));
+      }
+      if (abort.signal.aborted) return;
+
+      rememberBrands(found);
+      const named = new Set(found.map((item) => item.slug));
+      const gone  = missing.filter((slug) => !named.has(slug));
+      setUnknown(gone.length > 0 ? gone : NO_SLUGS);
+      setResolved((n) => n + 1);
+    })()
+      .catch(() => { /* a name that will not load is not a slug that is wrong */ })
+      .finally(() => { if (!abort.signal.aborted) setBusy(false); });
+
+    return () => abort.abort();
+  }, [key]);
+
+  const items = useMemo(
+    () => (key ? key.split(",") : [])
+      .map((slug) => brandNames.get(slug))
+      .filter((item): item is FilterItem => Boolean(item)),
+    // `resolved` stands for the shared cache having gained the missing names.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [key, resolved],
+  );
+
+  return { items, unknown, loading: busy };
 }
 
 // ── products ─────────────────────────────────────────────────────────────────
@@ -339,7 +467,11 @@ export function useShopProducts(filters: ProductFilters, pageSize: number): Prod
     items,
     total,
     hasMore,
-    loading:     busy && page === 1,
+    // Only a grid with nothing in it is worth a loader. A filter change over a
+    // grid the shopper is already reading dims what is there instead of
+    // replacing it with half a screen of wordmark.
+    loading:     busy && items.length === 0,
+    refreshing:  busy && page === 1 && items.length > 0,
     loadingMore: busy && page > 1,
     loadMore,
   };
