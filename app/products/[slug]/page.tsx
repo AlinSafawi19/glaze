@@ -403,7 +403,7 @@ export default function ProductPage() {
             <div className="w-full flex flex-col justify-start items-stretch gap-0 p-0 rounded-none border-y border-solid border-beige divide-y divide-beige">
               <FaqCardProduct
                 question="Delivery & Shipping"
-                answer="Orders are processed within 1–2 business days and the delivery fee is confirmed before dispatch."
+                answer="Orders are carefully prepared and delivered to your doorstep within 2–4 business days, so you can enjoy your purchase without the long wait."
                 className="w-full py-[8px]"
               />
               <FaqCardProduct
