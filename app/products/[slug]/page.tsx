@@ -337,9 +337,9 @@ export default function ProductPage() {
 
             </div>
 
-            {/* Details */}
+            {/* Description */}
             <div className="w-full flex flex-col justify-start items-start gap-[8px] p-0 overflow-clip rounded-none">
-              <SubtitleSm className="w-full max-w-[600px] h-auto !text-black !text-left">Details</SubtitleSm>
+              <SubtitleSm className="w-full max-w-[600px] h-auto !text-black !text-left">Description</SubtitleSm>
               <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.description}</BodySm>
             </div>
 
