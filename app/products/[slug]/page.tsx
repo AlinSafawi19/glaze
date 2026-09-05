@@ -38,6 +38,8 @@ function toProduct(e: RawEntry): Product {
     sku:             parseInt(e.SKU)        || 0,
     stock:           parseStock(e.Stock),
     description:     e.Description          ?? "",
+    best_for:        e["Best For"]          ?? "",
+    benefits:        e.Benefits             ?? "",
     key_ingredients: e["Key Ingredients"]   ?? "",
     sales_type:      e["Sales type"]        ?? "",
     collections:     relationSlug(e.Collections),
@@ -61,6 +63,8 @@ interface Product {
   sku:             number;
   stock:           number | null;
   description:     string;
+  best_for:        string;
+  benefits:        string;
   key_ingredients: string;
   sales_type:      string;
   collections:     string;
@@ -81,6 +85,8 @@ interface RawEntry extends RawRelations {
   SKU:             string;
   Stock?:          string;
   Description:     string;
+  "Best For":      string;
+  Benefits:        string;
   "Key Ingredients": string;
   "Sales type":    string;
   Collections:     Relation;
@@ -342,6 +348,23 @@ export default function ProductPage() {
               <SubtitleSm className="w-full max-w-[600px] h-auto !text-black !text-left">Description</SubtitleSm>
               <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.description}</BodySm>
             </div>
+
+            {/* Best for / Benefits — newer fields than the rest of the copy, so
+                each is dropped entirely rather than left as a heading over a
+                blank line on a product the shop has not filled in yet. */}
+            {product.best_for && (
+              <div className="w-full flex flex-col justify-start items-start gap-[8px] p-0 overflow-clip rounded-none">
+                <SubtitleSm className="w-full max-w-[600px] h-auto !text-black !text-left">Best For</SubtitleSm>
+                <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.best_for}</BodySm>
+              </div>
+            )}
+
+            {product.benefits && (
+              <div className="w-full flex flex-col justify-start items-start gap-[8px] p-0 overflow-clip rounded-none">
+                <SubtitleSm className="w-full max-w-[600px] h-auto !text-black !text-left">Benefits</SubtitleSm>
+                <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.benefits}</BodySm>
+              </div>
+            )}
 
             {/* Stock — said before the button rather than only on it, so the
                 shopper reads why it is disabled rather than that it is. */}
