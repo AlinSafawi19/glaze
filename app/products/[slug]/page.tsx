@@ -452,42 +452,47 @@ export default function ProductPage() {
         </div>
 
         {/* ── Container 3: Related products ── */}
-        <div className="w-full max-w-[1920px] flex flex-col justify-start items-start gap-[24px] overflow-clip rounded-none bg-white
-          pt-[48px] px-[16px] pb-[48px]
-          tablet:pt-[48px] tablet:px-[24px] tablet:pb-[48px]
-          desktop:pt-[64px] desktop:px-[32px] desktop:pb-[80px]">
+        {/* Hidden when the strip is empty: it is other products rather than a
+            curated list, so nothing to show means this is the only thing in
+            the shop — and a heading over a blank row reads as a failed load. */}
+        {related.length > 0 && (
+          <div className="w-full max-w-[1920px] flex flex-col justify-start items-start gap-[24px] overflow-clip rounded-none bg-white
+            pt-[48px] px-[16px] pb-[48px]
+            tablet:pt-[48px] tablet:px-[24px] tablet:pb-[48px]
+            desktop:pt-[64px] desktop:px-[32px] desktop:pb-[80px]">
 
-          {/* Title */}
-          <div className="w-full flex flex-row justify-between items-center gap-[16px] overflow-visible rounded-none p-0">
-            <H4 className="!text-black !text-left [text-wrap:balance]">Related <br/>Products</H4>
-            <Link href="/shop-all" tabIndex={-1}>
-              <OutlineButton icon={null}>Explore all</OutlineButton>
-            </Link>
+            {/* Title */}
+            <div className="w-full flex flex-row justify-between items-center gap-[16px] overflow-visible rounded-none p-0">
+              <H4 className="!text-black !text-left [text-wrap:balance]">Related <br/>Products</H4>
+              <Link href="/shop-all" tabIndex={-1}>
+                <OutlineButton icon={null}>Explore all</OutlineButton>
+              </Link>
+            </div>
+
+            {/* Products grid */}
+            <div
+              className="w-full grid overflow-visible rounded-none p-0
+                grid-cols-1
+                tablet:grid-cols-2"
+              style={{ columnGap: "16px", rowGap: "48px" }}
+            >
+              {related.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  title={p.title}
+                  price={p.price}
+                  discount={p.discount}
+                  imageSrc={p.cover_img_1}
+                  slug={p.slug}
+                  stock={p.stock}
+                  href={`/products/${p.slug}`}
+                  className="!w-full"
+                />
+              ))}
+            </div>
+
           </div>
-
-          {/* Products grid */}
-          <div
-            className="w-full grid overflow-visible rounded-none p-0
-              grid-cols-1
-              tablet:grid-cols-2"
-            style={{ columnGap: "16px", rowGap: "48px" }}
-          >
-            {related.map((p) => (
-              <ProductCard
-                key={p.id}
-                title={p.title}
-                price={p.price}
-                discount={p.discount}
-                imageSrc={p.cover_img_1}
-                slug={p.slug}
-                stock={p.stock}
-                href={`/products/${p.slug}`}
-                className="!w-full"
-              />
-            ))}
-          </div>
-
-        </div>
+        )}
 
       </div>
 

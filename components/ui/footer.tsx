@@ -82,7 +82,7 @@ export function Footer() {
 
             <div className="flex-1 flex flex-col justify-start items-start gap-[10px] overflow-clip rounded-none">
               <SubtitleMd className="w-full !text-white [text-wrap:balance]">Call us</SubtitleMd>
-              <LinkContact href={`tel:${"+1234567890"}`}>{"+1234567890"}</LinkContact>
+              <LinkContact href={`tel:${"+96181062168"}`}>{"+961 81 062 168"}</LinkContact>
             </div>
 
           </div>
