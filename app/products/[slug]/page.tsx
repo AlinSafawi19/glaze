@@ -352,6 +352,43 @@ export default function ProductPage() {
               <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.description}</BodySm>
             </div>
 
+            {/* The shop's own copy about this product, in the slot the three
+                fixed blurbs used to fill at the foot of every page. It reads
+                under the description but stays folded: collapsed it is three
+                rows rather than three blocks of prose, so it sits above the
+                buttons without pushing them down the page.
+
+                A field the shop has not filled in drops out entirely, and the
+                wrapper goes with the last of them so its rules never frame an
+                empty stack. Those rules are element borders rather than 1px
+                boxes so every boundary snaps to the device pixel grid the same
+                way. */}
+            {(product.benefits || product.best_for || product.how_to_use) && (
+              <div className="w-full flex flex-col justify-start items-stretch gap-0 p-0 rounded-none border-y border-solid border-beige divide-y divide-beige">
+                {product.benefits && (
+                  <FaqCardProduct
+                    question="Benefits"
+                    answer={product.benefits}
+                    className="w-full py-[8px]"
+                  />
+                )}
+                {product.best_for && (
+                  <FaqCardProduct
+                    question="Best For"
+                    answer={product.best_for}
+                    className="w-full py-[8px]"
+                  />
+                )}
+                {product.how_to_use && (
+                  <FaqCardProduct
+                    question="How To Use"
+                    answer={product.how_to_use}
+                    className="w-full py-[8px]"
+                  />
+                )}
+              </div>
+            )}
+
             {/* Stock — said before the button rather than only on it, so the
                 shopper reads why it is disabled rather than that it is. */}
             {(soldOut || lowNote) && (
@@ -383,39 +420,6 @@ export default function ProductPage() {
               </FilledButton>
               <WishlistDetailButton slug={product.slug} title={product.title} />
             </div>
-
-            {/* Bottom wrapper — the shop's own copy about this product rather
-                than the same three blurbs on every page. A field it has not
-                filled in drops out entirely, and the wrapper goes with the last
-                of them so its rules never frame an empty stack.
-
-                Rules are element borders rather than 1px boxes so every
-                boundary snaps to the device pixel grid the same way. */}
-            {(product.benefits || product.best_for || product.how_to_use) && (
-              <div className="w-full flex flex-col justify-start items-stretch gap-0 p-0 rounded-none border-y border-solid border-beige divide-y divide-beige">
-                {product.benefits && (
-                  <FaqCardProduct
-                    question="Benefits"
-                    answer={product.benefits}
-                    className="w-full py-[8px]"
-                  />
-                )}
-                {product.best_for && (
-                  <FaqCardProduct
-                    question="Best For"
-                    answer={product.best_for}
-                    className="w-full py-[8px]"
-                  />
-                )}
-                {product.how_to_use && (
-                  <FaqCardProduct
-                    question="How To Use"
-                    answer={product.how_to_use}
-                    className="w-full py-[8px]"
-                  />
-                )}
-              </div>
-            )}
 
           </div>
 
