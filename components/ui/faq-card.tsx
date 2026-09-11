@@ -103,7 +103,9 @@ function FaqCardBase({
             style={{ overflow: "hidden" }}
           >
             <div className="w-[476px] flex flex-col justify-start items-start gap-0 p-0 pr-[32px] overflow-clip rounded-none">
-              <BodySm className="w-full max-w-[600px] !text-black">
+              {/* Answers are shop-written now, and a routine typed as steps
+                  is only readable if the breaks survive. */}
+              <BodySm className="w-full max-w-[600px] whitespace-pre-line !text-black">
                 {answer}
               </BodySm>
             </div>

@@ -40,6 +40,7 @@ function toProduct(e: RawEntry): Product {
     description:     e.Description          ?? "",
     best_for:        e["Best For"]          ?? "",
     benefits:        e.Benefits             ?? "",
+    how_to_use:      e["How to Use"]        ?? "",
     key_ingredients: e["Key Ingredients"]   ?? "",
     sales_type:      e["Sales type"]        ?? "",
     collections:     relationSlug(e.Collections),
@@ -65,6 +66,7 @@ interface Product {
   description:     string;
   best_for:        string;
   benefits:        string;
+  how_to_use:      string;
   key_ingredients: string;
   sales_type:      string;
   collections:     string;
@@ -87,6 +89,7 @@ interface RawEntry extends RawRelations {
   Description:     string;
   "Best For":      string;
   Benefits:        string;
+  "How to Use":    string;
   "Key Ingredients": string;
   "Sales type":    string;
   Collections:     Relation;
@@ -349,23 +352,6 @@ export default function ProductPage() {
               <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.description}</BodySm>
             </div>
 
-            {/* Best for / Benefits — newer fields than the rest of the copy, so
-                each is dropped entirely rather than left as a heading over a
-                blank line on a product the shop has not filled in yet. */}
-            {product.best_for && (
-              <div className="w-full flex flex-col justify-start items-start gap-[8px] p-0 overflow-clip rounded-none">
-                <SubtitleSm className="w-full max-w-[600px] h-auto !text-black !text-left">Best For</SubtitleSm>
-                <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.best_for}</BodySm>
-              </div>
-            )}
-
-            {product.benefits && (
-              <div className="w-full flex flex-col justify-start items-start gap-[8px] p-0 overflow-clip rounded-none">
-                <SubtitleSm className="w-full max-w-[600px] h-auto !text-black !text-left">Benefits</SubtitleSm>
-                <BodySm className="w-full max-w-[480px] tablet:max-w-[600px] h-auto !text-black !text-left">{product.benefits}</BodySm>
-              </div>
-            )}
-
             {/* Stock — said before the button rather than only on it, so the
                 shopper reads why it is disabled rather than that it is. */}
             {(soldOut || lowNote) && (
@@ -398,25 +384,38 @@ export default function ProductPage() {
               <WishlistDetailButton slug={product.slug} title={product.title} />
             </div>
 
-            {/* Bottom wrapper — rules are element borders rather than 1px boxes so
-                every boundary snaps to the device pixel grid the same way. */}
-            <div className="w-full flex flex-col justify-start items-stretch gap-0 p-0 rounded-none border-y border-solid border-beige divide-y divide-beige">
-              <FaqCardProduct
-                question="Delivery & Shipping"
-                answer="Orders are carefully prepared and delivered to your doorstep within 2–4 business days, so you can enjoy your purchase without the long wait."
-                className="w-full py-[8px]"
-              />
-              <FaqCardProduct
-                question="Payment"
-                answer="Cash on delivery only — you pay the courier when the order reaches you. All sales are final."
-                className="w-full py-[8px]"
-              />
-              <FaqCardProduct
-                question="Product Details / Safety"
-                answer="All products are carefully crafted using high-quality, safe ingredients and materials."
-                className="w-full py-[8px]"
-              />
-            </div>
+            {/* Bottom wrapper — the shop's own copy about this product rather
+                than the same three blurbs on every page. A field it has not
+                filled in drops out entirely, and the wrapper goes with the last
+                of them so its rules never frame an empty stack.
+
+                Rules are element borders rather than 1px boxes so every
+                boundary snaps to the device pixel grid the same way. */}
+            {(product.benefits || product.best_for || product.how_to_use) && (
+              <div className="w-full flex flex-col justify-start items-stretch gap-0 p-0 rounded-none border-y border-solid border-beige divide-y divide-beige">
+                {product.benefits && (
+                  <FaqCardProduct
+                    question="Benefits"
+                    answer={product.benefits}
+                    className="w-full py-[8px]"
+                  />
+                )}
+                {product.best_for && (
+                  <FaqCardProduct
+                    question="Best For"
+                    answer={product.best_for}
+                    className="w-full py-[8px]"
+                  />
+                )}
+                {product.how_to_use && (
+                  <FaqCardProduct
+                    question="How To Use"
+                    answer={product.how_to_use}
+                    className="w-full py-[8px]"
+                  />
+                )}
+              </div>
+            )}
 
           </div>
 
