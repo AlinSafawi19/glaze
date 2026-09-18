@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, type ReactNode } from "react";
-import Image from "next/image";
 import { useParams } from "next/navigation";
 import { Truck, LockKeyhole, Wallet, PhoneCall, ShoppingBag } from "lucide-react";
 import { H1, H4, H5, BodySm, ItalicBodySm, SubtitleSm } from "@/components/ui/typography";
@@ -13,7 +12,7 @@ import { WishlistDetailButton } from "@/components/ui/wishlist-button";
 import { useCart } from "@/components/ui/use-cart";
 import { useLoadingGate } from "@/components/ui/loading-gate";
 import { SectionLoading } from "@/components/ui/section-loading";
-import { ProductImage } from "@/components/ui/product-image";
+import { ProductGallery } from "@/components/ui/product-gallery";
 import { categorySlugs, relationSlug, type Relation, type RawRelations } from "@/lib/relations";
 import { fetchBySlug, fetchRows } from "@/lib/api";
 import { isSoldOut, lowStockNote, parseStock } from "@/lib/stock";
@@ -133,7 +132,6 @@ export default function ProductPage() {
   const [product,      setProduct]      = useState<Product | null>(null);
   const [related,      setRelated]      = useState<Product[]>([]);
   const [loading,      setLoading]      = useState(true);
-  const [activeImage,  setActiveImage]  = useState(0);
   const [added,        setAdded]        = useState(false);
   const { add } = useCart();
 
@@ -143,9 +141,6 @@ export default function ProductPage() {
   if (sent !== slug) {
     setSent(slug);
     setLoading(true);
-    // The gallery belongs to the product that is leaving; the next one opens on
-    // its own cover.
-    setActiveImage(0);
   }
 
   useEffect(() => {
@@ -214,64 +209,8 @@ export default function ProductPage() {
         <div className="w-full max-w-[1920px] flex flex-col desktop:flex-row justify-start items-start gap-0 p-0 overflow-clip rounded-none bg-caledon">
 
           {/* Images wrapper */}
-          <div className="w-full desktop:w-[55%] flex flex-col justify-start items-start gap-[1px] p-0 overflow-clip rounded-none bg-caledon">
-
-            {/* img 1 — full height banner */}
-            <div className="relative w-full h-[400px] tablet:h-[50vh] desktop:h-screen overflow-visible rounded-none">
-              <ProductImage
-                src={product.cover_img_1}
-                alt={product.title}
-                sizes="(max-width: 1199px) 100vw, 55vw"
-              />
-            </div>
-
-            {/* img 2 + img 3 — mid banner */}
-            {(product.img_2 || product.img_3) && (
-              <div className="w-full h-[640px] tablet:h-[50vh] flex flex-col tablet:flex-row justify-start items-center gap-[1px] overflow-clip rounded-none">
-                {product.img_2 && (
-                  <div className="relative flex-1 w-full h-full overflow-visible rounded-none">
-                    <Image
-                      src={product.img_2}
-                      alt=""
-                      fill
-                      sizes="(max-width: 809px) 100vw, (max-width: 1199px) 50vw, 27vw"
-                      quality={100}
-                      unoptimized
-                      className="object-cover object-center"
-                    />
-                  </div>
-                )}
-                {product.img_3 && (
-                  <div className="relative flex-1 w-full h-full overflow-visible rounded-none">
-                    <Image
-                      src={product.img_3}
-                      alt=""
-                      fill
-                      sizes="(max-width: 809px) 100vw, (max-width: 1199px) 50vw, 27vw"
-                      quality={100}
-                      unoptimized
-                      className="object-cover object-center"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* img 4 — full height banner */}
-            {product.img_4 && (
-              <div className="relative w-full h-[400px] tablet:h-[50vh] desktop:h-screen overflow-visible rounded-none">
-                <Image
-                  src={product.img_4}
-                  alt=""
-                  fill
-                  sizes="(max-width: 1199px) 100vw, 55vw"
-                  quality={100}
-                  unoptimized
-                  className="object-cover object-center"
-                />
-              </div>
-            )}
-
+          <div className="w-full desktop:w-[55%] flex flex-col justify-start items-start gap-0 p-0 overflow-clip rounded-none bg-caledon">
+            <ProductGallery key={slug} images={images} title={product.title} />
           </div>
 
           {/* Details wrapper */}
