@@ -35,7 +35,6 @@ function toProduct(e: RawEntry): Product {
     categories:      categorySlugs(e),
     brand:           relationSlug(e.Brand),
     size:            e.Size                 ?? "",
-    sku:             parseInt(e.SKU)        || 0,
     stock:           parseStock(e.Stock),
     description:     e.Description          ?? "",
     best_for:        e["Best For"]          ?? "",
@@ -61,7 +60,6 @@ interface Product {
   categories:      string[];
   brand:           string;
   size:            string;
-  sku:             number;
   stock:           number | null;
   description:     string;
   best_for:        string;
@@ -84,7 +82,6 @@ interface RawEntry extends RawRelations {
   "Img 4":         string;
   Brand:           Relation;
   Size:            string;
-  SKU:             string;
   Stock?:          string;
   Description:     string;
   "Best For":      string;
@@ -318,12 +315,6 @@ export default function ProductPage() {
 
                 </div>
 
-              </div>
-
-              {/* SKU box */}
-              <div className="w-full flex flex-row justify-start items-start gap-[8px] p-0 overflow-clip rounded-none">
-                <BodySm className="w-auto max-w-[600px] !text-brown !text-left">SKU:</BodySm>
-                <BodySm className="w-auto h-auto max-w-[600px] !text-brown !text-left">{product.sku}</BodySm>
               </div>
 
             </div>
