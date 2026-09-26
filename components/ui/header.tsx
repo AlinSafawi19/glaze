@@ -87,15 +87,16 @@ function NavLink({ title, href, active }: { title: string; href: string; active:
  * Dropdown nav item (brands, categories) — the label opens a panel of entries
  * instead of navigating, on every breakpoint. The "All …" entry inside the
  * panel keeps the shop reachable.
+ *
+ * No "current page" state: Brands and Categories both lead into the same shop,
+ * so marking the page would light both at once.
  */
 function MenuNavItem({
   title,
-  active,
   items,
   spec,
 }: {
   title:  string;
-  active: boolean;
   items:  PagedList<FilterItem>;
   spec:   MenuSpec;
 }) {
@@ -104,7 +105,7 @@ function MenuNavItem({
   const [hovered, setHovered] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const on = active || hovered || open;
+  const on = hovered || open;
 
   // A click-driven panel needs an explicit way out.
   useEffect(() => {
@@ -134,7 +135,6 @@ function MenuNavItem({
         onMouseLeave={() => setHovered(false)}
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-current={active ? "page" : undefined}
         className="relative flex flex-row items-center justify-center gap-[6px] px-[12px] py-[6px] rounded-none overflow-clip bg-transparent border-none cursor-pointer"
       >
         <span
@@ -354,13 +354,11 @@ function Hamburger({ open }: { open: boolean }) {
 /** Drawer counterpart of {@link MenuNavItem} — taps expand in place. */
 function MenuDrawerItem({
   title,
-  active,
   items,
   spec,
   onNavigate,
 }: {
   title:      string;
-  active:     boolean;
   items:      PagedList<FilterItem>;
   spec:       MenuSpec;
   onNavigate: () => void;
@@ -375,14 +373,14 @@ function MenuDrawerItem({
         aria-expanded={expanded}
         className="w-full flex flex-row justify-between items-center gap-[10px] pb-[12px] rounded-none border-0 border-b border-dashed border-beige bg-transparent cursor-pointer"
       >
-        <ButtonSm className={`!text-left !text-[16px] ${active ? "!text-plum" : "!text-brown"}`}>
+        <ButtonSm className="!text-left !text-[16px] !text-brown">
           {title}
         </ButtonSm>
         <ChevronDown
           size={18}
           strokeWidth={1.5}
           aria-hidden
-          className={active ? "text-plum" : "text-brown"}
+          className="text-brown"
           style={{
             transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform 0.3s cubic-bezier(0.44, 0, 0.56, 1)",
@@ -503,7 +501,6 @@ export function Header() {
                 <MenuNavItem
                   key={title}
                   title={title}
-                  active={isActive(href)}
                   items={menuItems[submenu]}
                   spec={MENUS[submenu]}
                 />
@@ -568,7 +565,6 @@ export function Header() {
                     <MenuDrawerItem
                       key={title}
                       title={title}
-                      active={isActive(href)}
                       items={menuItems[submenu]}
                       spec={MENUS[submenu]}
                       onNavigate={() => setOpen(false)}
