@@ -18,19 +18,34 @@ const EASE   = [0.44, 0, 0.56, 1] as const;
 // Long, low-bounce ease so the panel glides rather than snaps.
 const PANEL  = { duration: 0.45, ease: [0.32, 0.72, 0, 1] as [number, number, number, number] };
 
-const NAV: { title: string; href: string; submenu?: boolean }[] = [
-  { title: "Home",     href: "/"         },
-  { title: "Brands",   href: "/shop-all", submenu: true },
-  { title: "About",    href: "/about"    },
+type Submenu = "brands" | "categories";
+
+const NAV: { title: string; href: string; submenu?: Submenu }[] = [
+  { title: "Home",       href: "/"         },
+  { title: "Brands",     href: "/shop-all", submenu: "brands"     },
+  { title: "Categories", href: "/shop-all", submenu: "categories" },
+  { title: "About",      href: "/about"    },
   { title: "Contact",  href: "/contact"  },
 ];
 
-/** `#shop` drops the shopper past the hero, onto the freshly filtered grid. */
-/** Brands listed in a menu before "Show more" — a shop can have a great many. */
-const BRAND_MENU_PAGE_SIZE = 10;
+/** Entries listed in a menu before "Show more" — a shop can have a great many. */
+const MENU_PAGE_SIZE = 10;
 
-const brandHref = (slug?: string) =>
-  slug ? `/shop-all?brand=${slug}#shop` : "/shop-all#shop";
+/** What each dropdown lists and where its entries point. `#shop` drops the
+ *  shopper past the hero, onto the freshly filtered grid. */
+interface MenuSpec {
+  /** The first entry: the whole shop, unfiltered. */
+  allLabel: string;
+  href:     (slug?: string) => string;
+}
+
+const shopHref = (param: string) => (slug?: string) =>
+  slug ? `/shop-all?${param}=${slug}#shop` : "/shop-all#shop";
+
+const MENUS: Record<Submenu, MenuSpec> = {
+  brands:     { allLabel: "All brands",     href: shopHref("brand")    },
+  categories: { allLabel: "All categories", href: shopHref("category") },
+};
 
 /**
  * Nav link built on the same sweep-fill interaction as OutlineButton: a solid
@@ -69,17 +84,20 @@ function NavLink({ title, href, active }: { title: string; href: string; active:
 }
 
 /**
- * Brands nav item — the label opens a panel of brands instead of navigating,
- * on every breakpoint. "All brands" inside the panel keeps the shop reachable.
+ * Dropdown nav item (brands, categories) — the label opens a panel of entries
+ * instead of navigating, on every breakpoint. The "All …" entry inside the
+ * panel keeps the shop reachable.
  */
-function BrandsNavItem({
+function MenuNavItem({
   title,
   active,
-  brands,
+  items,
+  spec,
 }: {
   title:  string;
   active: boolean;
-  brands: PagedList<FilterItem>;
+  items:  PagedList<FilterItem>;
+  spec:   MenuSpec;
 }) {
   const pathname = usePathname();
   const [open,    setOpen]    = useState(false);
@@ -103,7 +121,7 @@ function BrandsNavItem({
     };
   }, [open]);
 
-  // Brand links only change the query, so the route effect above cannot close
+  // Menu links only change the query, so the route effect above cannot close
   // the panel on its own — but a jump to another page still should.
   useEffect(() => { setOpen(false); }, [pathname]);
 
@@ -158,27 +176,27 @@ function BrandsNavItem({
             transition={{ duration: 0.25, ease: EASE }}
           >
             <div className="min-w-[220px] max-h-[60vh] overflow-y-auto flex flex-col justify-start items-stretch gap-[2px] bg-lavender border border-dashed border-beige rounded-none p-[8px]">
-              <BrandMenuLink href={brandHref()} label="All brands" onNavigate={() => setOpen(false)} />
-              {brands.items.map((brand) => (
-                <BrandMenuLink
-                  key={brand.id}
-                  href={brandHref(brand.slug)}
-                  label={brand.name}
+              <MenuLink href={spec.href()} label={spec.allLabel} onNavigate={() => setOpen(false)} />
+              {items.items.map((item) => (
+                <MenuLink
+                  key={item.id}
+                  href={spec.href(item.slug)}
+                  label={item.name}
                   onNavigate={() => setOpen(false)}
                 />
               ))}
-              {/* The panel scrolls, but a shop with a hundred brands should not
+              {/* The panel scrolls, but a shop with a hundred entries should not
                   make the shopper drag through all of them to reach the end -
                   and the ones past this page have not been fetched anyway. */}
               <PagedListControls
-                remaining={brands.total - brands.items.length}
-                busy={brands.loadingMore}
-                onMore={brands.loadMore}
+                remaining={items.total - items.items.length}
+                busy={items.loadingMore}
+                onMore={items.loadMore}
                 className="px-[10px] pb-[4px]"
               />
               {/* Only while the request is in flight — a list that comes back empty
-                  leaves "All brands" standing on its own rather than a stuck spinner. */}
-              {brands.loading && (
+                  leaves "All …" standing on its own rather than a stuck spinner. */}
+              {items.loading && (
                 <BodySm className="!text-brown !text-left px-[10px] py-[8px]">Loading…</BodySm>
               )}
             </div>
@@ -189,7 +207,7 @@ function BrandsNavItem({
   );
 }
 
-function BrandMenuLink({
+function MenuLink({
   href,
   label,
   onNavigate,
@@ -205,7 +223,7 @@ function BrandMenuLink({
       onClick={onNavigate}
       className="w-full flex flex-row justify-start items-center px-[10px] py-[8px] rounded-none transition-colors duration-300 ease-[cubic-bezier(0.44,0,0.56,1)] hover:bg-blush"
     >
-      {/* Brand names are set as their owners write them — no uppercasing. */}
+      {/* Names are set as their owners write them — no uppercasing. */}
       <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">{label}</ButtonSm>
     </Link>
   );
@@ -333,16 +351,18 @@ function Hamburger({ open }: { open: boolean }) {
   );
 }
 
-/** Drawer counterpart of {@link BrandsNavItem} — taps expand in place. */
-function BrandsDrawerItem({
+/** Drawer counterpart of {@link MenuNavItem} — taps expand in place. */
+function MenuDrawerItem({
   title,
   active,
-  brands,
+  items,
+  spec,
   onNavigate,
 }: {
   title:      string;
   active:     boolean;
-  brands:     PagedList<FilterItem>;
+  items:      PagedList<FilterItem>;
+  spec:       MenuSpec;
   onNavigate: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -380,18 +400,18 @@ function BrandsDrawerItem({
             transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
           >
             <div className="w-full flex flex-col justify-start items-start gap-[12px] pl-[12px] border-l border-dashed border-beige">
-              <Link href={brandHref()} onClick={onNavigate} className="w-full">
-                <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">All brands</ButtonSm>
+              <Link href={spec.href()} onClick={onNavigate} className="w-full">
+                <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">{spec.allLabel}</ButtonSm>
               </Link>
-              {brands.items.map((brand) => (
-                <Link key={brand.id} href={brandHref(brand.slug)} onClick={onNavigate} className="w-full">
-                  <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">{brand.name}</ButtonSm>
+              {items.items.map((item) => (
+                <Link key={item.id} href={spec.href(item.slug)} onClick={onNavigate} className="w-full">
+                  <ButtonSm className="!text-left !text-[14px] !text-brown !normal-case">{item.name}</ButtonSm>
                 </Link>
               ))}
               <PagedListControls
-                remaining={brands.total - brands.items.length}
-                busy={brands.loadingMore}
-                onMore={brands.loadMore}
+                remaining={items.total - items.items.length}
+                busy={items.loadingMore}
+                onMore={items.loadMore}
               />
             </div>
           </motion.div>
@@ -403,11 +423,13 @@ function BrandsDrawerItem({
 
 export function Header() {
   const pathname = usePathname();
-  // One request for the whole header: the desktop panel and the drawer render
-  // the same list, so they share the same page of it. Sorted by name to match
-  // the shop's A–Z index — the same ten brands in two orders reads as two
-  // different lists.
-  const brands = useFilterOptions("brands", BRAND_MENU_PAGE_SIZE, "name");
+  // One request per list for the whole header: the desktop panel and the
+  // drawer render the same list, so they share the same page of it. Sorted by
+  // name to match the shop's A–Z index — the same ten brands in two orders
+  // reads as two different lists.
+  const brands     = useFilterOptions("brands",     MENU_PAGE_SIZE, "name");
+  const categories = useFilterOptions("categories", MENU_PAGE_SIZE, "name");
+  const menuItems: Record<Submenu, PagedList<FilterItem>> = { brands, categories };
   const [open,     setOpen]     = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -478,7 +500,13 @@ export function Header() {
           <nav className="hidden tablet:flex absolute left-1/2 -translate-x-1/2 flex-row items-center gap-[8px] desktop:gap-[16px]">
             {NAV.map(({ title, href, submenu }) =>
               submenu ? (
-                <BrandsNavItem key={href} title={title} active={isActive(href)} brands={brands} />
+                <MenuNavItem
+                  key={title}
+                  title={title}
+                  active={isActive(href)}
+                  items={menuItems[submenu]}
+                  spec={MENUS[submenu]}
+                />
               ) : (
                 <NavLink key={href} title={title} href={href} active={isActive(href)} />
               )
@@ -537,11 +565,12 @@ export function Header() {
               <nav className="w-full flex flex-col justify-start items-start gap-[16px]">
                 {NAV.map(({ title, href, submenu }) =>
                   submenu ? (
-                    <BrandsDrawerItem
-                      key={href}
+                    <MenuDrawerItem
+                      key={title}
                       title={title}
                       active={isActive(href)}
-                      brands={brands}
+                      items={menuItems[submenu]}
+                      spec={MENUS[submenu]}
                       onNavigate={() => setOpen(false)}
                     />
                   ) : (

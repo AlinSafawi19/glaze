@@ -258,16 +258,20 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
 
   const collectionParam = searchParams.get("collection") ?? "";
   const brandParam      = searchParams.get("brand") ?? "";
+  const categoryParam   = searchParams.get("category") ?? "";
 
   const [searchValue,        setSearchValue]        = useState("");
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedSkinTypes,  setSelectedSkinTypes]  = useState<Set<string>>(new Set());
 
-  const setParam = useCallback(
-    (key: string, values: string[]) => {
+  // Several keys in one write: two back-to-back replaces would each start from
+  // the same stale query, and the second would put back what the first cleared.
+  const setParams = useCallback(
+    (updates: Record<string, string[]>) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (values.length > 0) params.set(key, values.join(","));
-      else params.delete(key);
+      for (const [key, values] of Object.entries(updates)) {
+        if (values.length > 0) params.set(key, values.join(","));
+        else params.delete(key);
+      }
 
       const query = params.toString();
       // `replace`, not `push`: ticking five brands should not cost five presses
@@ -278,16 +282,23 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
     [router, pathname, searchParams],
   );
 
-  // `?brand=` and `?collection=` *are* the selection rather than a seed for one.
+  const setParam = useCallback(
+    (key: string, values: string[]) => setParams({ [key]: values }),
+    [setParams],
+  );
+
+  // `?brand=`, `?category=` and `?collection=` *are* the selection rather than a seed for one.
   // Reading them straight through means the first render is already filtered, a
   // refresh or a shared link lands on the shop the shopper was looking at, and
   // picking the same brand from the header twice is no longer a dead click
   // against a value that never changed.
   const brandPicks      = useParamSet("brand",      brandParam,      setParam);
   const collectionPicks = useParamSet("collection", collectionParam, setParam);
+  const categoryPicks   = useParamSet("category",   categoryParam,   setParam);
 
   const selectedBrands      = brandPicks.selected;
   const selectedCollections = collectionPicks.selected;
+  const selectedCategories  = categoryPicks.selected;
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 810);
@@ -316,15 +327,15 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
   // so the anchor can be missing when the router first looks for it - and a
   // second pick from the menu is only a query change, with no remount at all.
   //
-  // A brand picked from the menu is about the products it filtered, so that
-  // lands on the grid rather than on the wall of chips it was picked from. The
+  // A brand or category picked from the menu is about the products it
+  // filtered, so that lands on the grid rather than on the wall of chips it was picked from. The
   // chip toggles below rewrite the query without the hash, which is what keeps
   // this from firing again on every tick.
   useEffect(() => {
     if (window.location.hash !== "#shop") return;
-    const target = brandParam ? "products" : "shop";
+    const target = brandParam || categoryParam ? "products" : "shop";
     document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [searchParams, brandParam]);
+  }, [searchParams, brandParam, categoryParam]);
 
   const categories  = useFilterOptions("categories",  OPTIONS_PAGE_SIZE);
   const collections = useFilterOptions("collections", OPTIONS_PAGE_SIZE);
@@ -369,9 +380,8 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
   // another part of the page was the surprise, not the convenience.
   function handleClear() {
     setSearchValue("");
-    setSelectedCategories(new Set());
     setSelectedSkinTypes(new Set());
-    collectionPicks.clear();
+    setParams({ category: [], collection: [] });
   }
 
   return (
@@ -413,8 +423,8 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
               searchValue={searchValue}
               onSearchChange={setSearchValue}
               selectedCategories={selectedCategories}
-              onCategoryToggle={(slug) => setSelectedCategories((prev) => toggled(prev, slug))}
-              onCategoryAll={() => setSelectedCategories(new Set())}
+              onCategoryToggle={categoryPicks.toggle}
+              onCategoryAll={categoryPicks.clear}
               selectedCollections={selectedCollections}
               onCollectionToggle={collectionPicks.toggle}
               onCollectionAll={collectionPicks.clear}
