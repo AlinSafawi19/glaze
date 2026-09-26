@@ -163,6 +163,27 @@ export default function Contact() {
           />
         </div>
 
+        {/* Frosted glass — a pane laid over the photo rather than the photo
+            itself blurred: it softens whatever sits behind it, a pale tint
+            lifts it toward the palette, and a fine grain keeps it matte. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-[1] pointer-events-none"
+          style={{
+            backdropFilter:       "blur(24px) saturate(1.15)",
+            WebkitBackdropFilter: "blur(24px) saturate(1.15)",
+            backgroundColor:      "rgba(255, 255, 255, 0.18)",
+          }}
+        >
+          <div
+            className="absolute inset-0 opacity-[0.12] mix-blend-overlay"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            }}
+          />
+        </div>
+
         {/* Outer container */}
         <div className="relative w-full max-w-[1920px] flex flex-col justify-start items-center overflow-clip rounded-none z-[2]
           gap-[56px] pt-[64px] px-[16px] pb-[64px]
