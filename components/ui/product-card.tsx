@@ -19,6 +19,9 @@ interface ProductCardProps {
   className?: string;
   /** Units left, or null when the shop does not track this product. */
   stock?: number | null;
+  /** Denser grids: the image follows the card's width instead of a fixed
+   *  height, and the buttons tighten to fit a narrower column. */
+  compact?: boolean;
 }
 
 const EASE = "cubic-bezier(0.44, 0, 0.56, 1)";
@@ -33,6 +36,7 @@ export function ProductCard({
   href      = "#",
   className = "",
   stock     = null,
+  compact   = false,
 }: ProductCardProps) {
   const soldOut = isSoldOut(stock);
   const lowNote = lowStockNote(stock);
@@ -61,14 +65,14 @@ export function ProductCard({
   return (
     <a
       href={href}
-      className={`w-[320px] flex flex-col justify-start items-start gap-[16px] p-0 overflow-visible rounded-none ${cursorVisible ? "cursor-none" : ""} ${className}`}
+      className={`w-[320px] h-full flex flex-col justify-start items-start gap-[16px] p-0 overflow-visible rounded-none ${cursorVisible ? "cursor-none" : ""} ${className}`}
       style={{ transition: `all 0.4s ${EASE} 0s`, rotate: "0deg" }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <DiscoverCursor visible={cursorVisible} />
       {/* Img Wrapper */}
-      <div className="w-full h-[360px] max-h-[360px] flex flex-row justify-center items-center gap-[10px] p-0 overflow-clip rounded-none relative">
+      <div className={`w-full ${compact ? "aspect-[4/5]" : "h-[360px] max-h-[360px]"} flex flex-row justify-center items-center gap-[10px] p-0 overflow-clip rounded-none relative`}>
 
         {/* Image */}
         <div
@@ -78,7 +82,7 @@ export function ProductCard({
           <ProductImage
             src={imageSrc}
             alt={imageAlt}
-            sizes="320px"
+            sizes={compact ? "240px" : "320px"}
             className={`object-cover ${soldOut ? "opacity-45 grayscale" : ""}`}
           />
         </div>
@@ -105,11 +109,12 @@ export function ProductCard({
         )}
       </div>
 
-      {/* Details Wrapper */}
-      <div className="w-full flex flex-col justify-start items-start gap-[6px] p-0 overflow-clip rounded-none">
+      {/* Details Wrapper — fills the rest of the card, so in a grid row the
+          price and buttons line up whatever length the titles run to. */}
+      <div className="w-full grow flex flex-col justify-start items-start gap-[6px] p-0 overflow-clip rounded-none">
 
         {/* Title */}
-        <SubtitleMd className="w-full !text-black !text-left">{title}</SubtitleMd>
+        <SubtitleMd className="w-full grow !text-black !text-left">{title}</SubtitleMd>
 
         {/* Price Wrapper */}
         <div className="w-full flex flex-row justify-start items-center gap-[4px] p-0 overflow-clip rounded-none">
@@ -139,7 +144,9 @@ export function ProductCard({
                 e.stopPropagation();
                 if (!soldOut) add(slug);
               }}
-              className={`flex-1 font-clash font-medium clash-features uppercase text-[13px] leading-[1.4] border border-dotted border-beige px-[16px] py-[10px] rounded-none bg-transparent transition-colors duration-300 ${
+              className={`flex-1 font-clash font-medium clash-features uppercase leading-[1.4] border border-dotted border-beige py-[10px] ${
+                compact ? "text-[12px] px-[8px]" : "text-[13px] px-[16px]"
+              } rounded-none bg-transparent transition-colors duration-300 ${
                 soldOut
                   ? "text-beige cursor-not-allowed"
                   : "text-brown cursor-pointer hover:bg-blush hover:text-plum"

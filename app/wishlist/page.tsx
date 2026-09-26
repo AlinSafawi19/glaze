@@ -116,7 +116,7 @@ export default function Wishlist() {
 
           {settled && saved.length > 0 && (
             <>
-              <div className="w-full flex flex-row flex-wrap justify-start items-start gap-[24px] tablet:gap-[32px]">
+              <div className="w-full flex flex-row flex-wrap justify-start items-stretch gap-[24px] tablet:gap-[32px]">
                 {saved.map((p) => (
                   <ProductCard
                     key={p.id}

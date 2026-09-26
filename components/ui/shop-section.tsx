@@ -36,6 +36,132 @@ const FILTER_SETTLE = 180;
 
 const EASE = "cubic-bezier(0.44, 0, 0.56, 1)";
 
+/** Screen sizes the grid can be tuned for, split where the Tailwind tiers are. */
+type Tier = "mobile" | "tablet" | "desktop";
+
+/** Products per row the shopper can pick from, per tier. The first is the
+ *  default: what the grid showed before there was a choice. */
+const COLUMN_OPTIONS: Record<Tier, number[]> = {
+  mobile:  [1, 2],
+  tablet:  [2, 3],
+  desktop: [3, 2, 4],
+};
+
+const COLUMNS_KEY = "glaze:shop-columns";
+
+function tierOf(width: number): Tier {
+  if (width >= 1200) return "desktop";
+  if (width >= 810)  return "tablet";
+  return "mobile";
+}
+
+function readColumns(): Partial<Record<Tier, number>> {
+  try {
+    const raw    = window.localStorage.getItem(COLUMNS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * How many products sit in a row, chosen per screen size and remembered: two
+ * across on a phone says nothing about what the same shopper wants on a laptop.
+ * `tier` is null until mounted, and the grid keeps its responsive classes until
+ * then, so the server render and the first paint agree.
+ */
+function useGridColumns() {
+  const [tier,   setTier]   = useState<Tier | null>(null);
+  // Read lazily: nothing uses it until `tier` is set after mount, so the
+  // server's empty guess never reaches the markup.
+  const [chosen, setChosen] = useState<Partial<Record<Tier, number>>>(() =>
+    typeof window === "undefined" ? {} : readColumns(),
+  );
+
+  useEffect(() => {
+    const check = () => setTier(tierOf(window.innerWidth));
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const options = tier ? COLUMN_OPTIONS[tier] : [];
+  const pick    = tier ? chosen[tier] : undefined;
+  const columns = tier ? (pick && options.includes(pick) ? pick : options[0]) : null;
+
+  const setColumns = useCallback(
+    (n: number) => {
+      if (!tier) return;
+      setChosen((prev) => {
+        const next = { ...prev, [tier]: n };
+        try {
+          window.localStorage.setItem(COLUMNS_KEY, JSON.stringify(next));
+        } catch {
+          /* storage blocked — the choice still holds for this visit */
+        }
+        return next;
+      });
+    },
+    [tier],
+  );
+
+  // Denser than the tier's default: the cards shrink to suit.
+  const compact = tier !== null && columns !== null && columns > COLUMN_OPTIONS[tier][0];
+
+  return { options, columns, setColumns, compact };
+}
+
+/** A glyph of `n` bars — the row the button will lay out. */
+function ColumnsIcon({ n }: { n: number }) {
+  const gap   = 2;
+  const width = (16 - gap * (n - 1)) / n;
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => (
+        <rect key={i} x={i * (width + gap)} y="0" width={width} height="16" fill="currentColor" />
+      ))}
+    </svg>
+  );
+}
+
+function ColumnPicker({
+  options,
+  value,
+  onChange,
+}: {
+  options:  number[];
+  value:    number | null;
+  onChange: (n: number) => void;
+}) {
+  if (options.length < 2 || value === null) return null;
+  const sorted = [...options].sort((a, b) => a - b);
+  return (
+    <div role="group" aria-label="Products per row" className="flex flex-row items-center gap-[8px]">
+      {sorted.map((n) => {
+        const active = n === value;
+        return (
+          <button
+            key={n}
+            type="button"
+            aria-pressed={active}
+            aria-label={`${n} per row`}
+            title={`${n} per row`}
+            onClick={() => onChange(n)}
+            className={`w-[36px] h-[36px] flex justify-center items-center border border-dotted rounded-none cursor-pointer transition-colors duration-300 ${
+              active
+                ? "bg-blush border-plum text-plum"
+                : "bg-transparent border-beige text-beige hover:text-brown"
+            }`}
+          >
+            <ColumnsIcon n={n} />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The one spinner left in the app, and deliberately small: appending the next
  * page is a nudge at the bottom of a grid the shopper is already reading, so it
@@ -121,6 +247,7 @@ function useParamSet(
 
 export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}) {
   const [isMobile, setIsMobile] = useState(false);
+  const grid = useGridColumns();
 
   // Filter state. Slugs throughout: they are what the API filters on, what the
   // shop's own links carry, and what a deep link can apply before any list has
@@ -266,8 +393,9 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
         />
 
         {/* Title wrapper */}
-        <div className="w-full flex flex-row justify-start items-center gap-[16px] p-0 overflow-visible rounded-none">
+        <div className="w-full flex flex-row justify-between items-center gap-[16px] p-0 overflow-visible rounded-none">
           <H4 className="w-auto h-auto !text-beige !text-left">Products</H4>
+          <ColumnPicker options={grid.options} value={grid.columns} onChange={grid.setColumns} />
         </div>
 
         {/* Shop */}
@@ -312,7 +440,12 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
                 // A filter change dims the grid it is about to replace rather
                 // than tearing it down for half a screen of wordmark: the
                 // shopper keeps their place, and the page keeps its height.
-                style={{ opacity: products.refreshing ? 0.45 : 1, transition: `opacity 0.3s ${EASE}` }}
+                // Once mounted, the shopper's pick overrides the responsive default.
+                style={{
+                  opacity: products.refreshing ? 0.45 : 1,
+                  transition: `opacity 0.3s ${EASE}`,
+                  ...(grid.columns && { gridTemplateColumns: `repeat(${grid.columns}, minmax(0, 1fr))` }),
+                }}
                 className="grid
                 grid-cols-1 gap-x-[16px] gap-y-[48px]
                 tablet:grid-cols-2 tablet:gap-y-[40px]
@@ -328,6 +461,7 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
                     stock={product.stock}
                     href={`/products/${product.slug}`}
                     className="!w-full"
+                    compact={grid.compact}
                   />
                 ))}
               </div>
