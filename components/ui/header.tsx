@@ -586,8 +586,8 @@ export function Header() {
 
               <div className="w-full mt-auto flex flex-col justify-start items-start gap-[4px]">
                 <BodySm className="!text-brown !text-left">Korean skincare, curated</BodySm>
-                <a href="https://glaze.alinsafawi.com" target="_blank" rel="noopener noreferrer">
-                  <BodySm className="!text-plum !text-left">glaze.alinsafawi.com</BodySm>
+                <a href="mailto:hello@glazekorea.com">
+                  <BodySm className="!text-plum !text-left">hello@glazekorea.com</BodySm>
                 </a>
               </div>
 
