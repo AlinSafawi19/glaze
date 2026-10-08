@@ -13,6 +13,7 @@ import { PagedListControls } from "./paged-list";
 import { useFilterOptions, type PagedList } from "./use-shop-data";
 import type { FilterItem } from "./filters";
 import { useScrollLock } from "./use-scroll-lock";
+import { SiteSearch } from "./site-search";
 
 const EASE   = [0.44, 0, 0.56, 1] as const;
 // Long, low-bounce ease so the panel glides rather than snaps.
@@ -512,6 +513,7 @@ export function Header() {
 
           {/* Right side */}
           <div className="flex flex-row items-center gap-0">
+            <SiteSearch />
             <AccountLink />
             <WishlistLink />
             <CartLink className="-mr-[6px]" />

@@ -260,7 +260,17 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
   const brandParam      = searchParams.get("brand") ?? "";
   const categoryParam   = searchParams.get("category") ?? "";
 
-  const [searchValue,        setSearchValue]        = useState("");
+  const searchParam     = searchParams.get("q") ?? "";
+
+  // `?q=` comes from the header's search. It seeds the sidebar's box rather
+  // than owning it: typing there refines the grid without rewriting the URL on
+  // every keystroke, and a fresh search from the header replaces it.
+  const [searchValue,        setSearchValue]        = useState(searchParam);
+  const [seenSearchParam,    setSeenSearchParam]    = useState(searchParam);
+  if (seenSearchParam !== searchParam) {
+    setSeenSearchParam(searchParam);
+    setSearchValue(searchParam);
+  }
   const [selectedSkinTypes,  setSelectedSkinTypes]  = useState<Set<string>>(new Set());
 
   // Several keys in one write: two back-to-back replaces would each start from
@@ -333,9 +343,9 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
   // this from firing again on every tick.
   useEffect(() => {
     if (window.location.hash !== "#shop") return;
-    const target = brandParam || categoryParam ? "products" : "shop";
+    const target = brandParam || categoryParam || searchParam ? "products" : "shop";
     document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [searchParams, brandParam, categoryParam]);
+  }, [searchParams, brandParam, categoryParam, searchParam]);
 
   const categories  = useFilterOptions("categories",  OPTIONS_PAGE_SIZE);
   const collections = useFilterOptions("collections", OPTIONS_PAGE_SIZE);
@@ -381,7 +391,7 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
   function handleClear() {
     setSearchValue("");
     setSelectedSkinTypes(new Set());
-    setParams({ category: [], collection: [] });
+    setParams({ category: [], collection: [], q: [] });
   }
 
   return (
