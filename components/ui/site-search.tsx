@@ -161,7 +161,11 @@ export function SiteSearch() {
   useScrollLock(open);
 
   // A jump to another page closes the panel behind it.
-  useEffect(() => { setOpen(false); }, [pathname]);
+  const [seenPath, setSeenPath] = useState(pathname);
+  if (seenPath !== pathname) {
+    setSeenPath(pathname);
+    setOpen(false);
+  }
 
   // "/" opens search from anywhere that is not already taking text; Escape
   // closes it.
