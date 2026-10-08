@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { VerifyForm } from "@/components/ui/account-forms";
 import { currentCustomer } from "@/lib/account";
 
-export const metadata = { title: "Confirm your email — GLAZE" };
+export const metadata = { title: "Confirm your email" };
 
 export default async function VerifyPage({
   searchParams,

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/typography";
 import { customerOrders, readToken, type CustomerOrder } from "@/lib/account";
 
-export const metadata = { title: "Your orders — GLAZE" };
+export const metadata = { title: "Your orders" };
 
 const DATE = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",

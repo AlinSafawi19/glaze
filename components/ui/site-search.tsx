@@ -240,10 +240,20 @@ export function SiteSearch() {
                       aria-label="Search products and brands"
                       value={term}
                       onChange={(e) => setTerm(e.target.value)}
-                      className="w-full h-[48px] font-inter font-normal text-black text-[16px] bg-white border border-beige rounded-none pl-[44px] pr-[12px] placeholder:text-brown focus:outline-none focus:border-black [&::-webkit-search-cancel-button]:hidden"
+                      className="w-full h-[48px] font-inter font-normal text-black text-[16px] bg-white border border-beige rounded-none pl-[44px] pr-[44px] placeholder:text-brown focus:outline-none focus:border-black [&::-webkit-search-cancel-button]:hidden"
                       style={{ lineHeight: "1.2em", transition: "border-color 0.3s cubic-bezier(0.44, 0, 0.56, 1)" }}
                     />
                     <Search size={18} strokeWidth={1.5} className="absolute left-[14px] top-1/2 -translate-y-1/2 text-brown pointer-events-none" />
+                    {term && (
+                      <button
+                        type="button"
+                        onClick={() => { setTerm(""); inputRef.current?.focus(); }}
+                        aria-label="Clear search"
+                        className="absolute right-[4px] top-1/2 -translate-y-1/2 flex items-center justify-center w-[40px] h-[40px] rounded-none bg-transparent border-none cursor-pointer text-brown hover:text-plum transition-colors duration-300"
+                      >
+                        <X size={16} strokeWidth={1.5} />
+                      </button>
+                    )}
                   </div>
                   <button
                     type="button"

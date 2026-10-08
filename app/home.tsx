@@ -85,7 +85,7 @@ const categories = [
   },
 ];
 
-export default function Home() {
+export function Home() {
   const { products: featuredProducts, loading: featuredLoading } = useFeaturedProducts(3);
 
   return (

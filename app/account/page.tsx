@@ -7,7 +7,7 @@ import { SignOutButton } from "@/components/ui/sign-out-button";
 import { H2, H4, ItalicBodyLg, BodySm } from "@/components/ui/typography";
 import { currentCustomer } from "@/lib/account";
 
-export const metadata = { title: "Your account — GLAZE" };
+export const metadata = { title: "Your account" };
 
 export default async function AccountPage() {
   const customer = await currentCustomer();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { SubtitleMd, SubtitleSm } from "./typography";
 import { ProductImage } from "./product-image";
 import { DiscoverCursor } from "./discover-cursor";
@@ -32,7 +33,7 @@ export function ProductCard({
   price     = 260,
   discount  = 50,
   imageSrc  = "",
-  imageAlt  = "",
+  imageAlt,
   href      = "#",
   className = "",
   stock     = null,
@@ -63,7 +64,7 @@ export function ProductCard({
   const cursorVisible = isDesktop && hovered && !overCta;
 
   return (
-    <a
+    <Link
       href={href}
       className={`w-[320px] h-full flex flex-col justify-start items-start gap-[16px] p-0 overflow-visible rounded-none ${cursorVisible ? "cursor-none" : ""} ${className}`}
       style={{ transition: `all 0.4s ${EASE} 0s`, rotate: "0deg" }}
@@ -81,7 +82,7 @@ export function ProductCard({
         >
           <ProductImage
             src={imageSrc}
-            alt={imageAlt}
+            alt={imageAlt ?? title}
             sizes={compact ? "240px" : "320px"}
             className={`object-cover ${soldOut ? "opacity-45 grayscale" : ""}`}
           />
@@ -164,6 +165,6 @@ export function ProductCard({
         )}
 
       </div>
-    </a>
+    </Link>
   );
 }

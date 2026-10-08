@@ -5,6 +5,7 @@ import { Footer } from "@/components/ui/footer";
 import { Header } from "@/components/ui/header";
 import { CartDrawer } from "@/components/ui/cart-drawer";
 import { PageLoader } from "@/components/ui/page-loader";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -12,8 +13,23 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "GLAZE",
-  description: "Korean skincare, curated",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default:  `${SITE_NAME} — Korean skincare, curated`,
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type:        "website",
+    siteName:    SITE_NAME,
+    locale:      "en_US",
+    title:       `${SITE_NAME} — Korean skincare, curated`,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export default function RootLayout({

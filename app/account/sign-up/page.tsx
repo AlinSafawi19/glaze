@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SignUpForm } from "@/components/ui/account-forms";
 import { currentCustomer } from "@/lib/account";
 
-export const metadata = { title: "Create account — GLAZE" };
+export const metadata = { title: "Create account" };
 
 export default async function SignUpPage({
   searchParams,
