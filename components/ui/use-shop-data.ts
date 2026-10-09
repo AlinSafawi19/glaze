@@ -386,6 +386,28 @@ export interface ProductFilters {
 
 export type ProductPage = PagedList<Product>;
 
+/** The shop's first page as the server fetched it, for the grid to open on. */
+export interface ShopSeed {
+  /** The selection it answers — the URL's filters, as the shop reads them. */
+  filters:  ProductFilters;
+  rows:     RawProduct[];
+  total:    number;
+  hasMore:  boolean;
+  /** The page size it was fetched at; a different one is a different request. */
+  pageSize: number;
+}
+
+function shopKey(filters: ProductFilters, pageSize: number): string {
+  return JSON.stringify([
+    filters.search,
+    filters.categories,
+    filters.brands,
+    filters.collections,
+    filters.skinTypes,
+    pageSize,
+  ]);
+}
+
 /**
  * The shop grid.
  *
@@ -393,26 +415,27 @@ export type ProductPage = PagedList<Product>;
  * current selection — and changing a filter starts a fresh first page rather
  * than re-slicing rows that are already stale.
  */
-export function useShopProducts(filters: ProductFilters, pageSize: number): ProductPage {
-  const [items,   setItems]   = useState<Product[]>([]);
-  const [page,    setPage]    = useState(1);
-  const [total,   setTotal]   = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [busy,    setBusy]    = useState(true);
-
+export function useShopProducts(filters: ProductFilters, pageSize: number, seed?: ShopSeed): ProductPage {
   // One string standing for the whole selection: it is what decides when the
   // grid has to start over, and comparing it is cheaper than five array diffs.
   const key = useMemo(
-    () => JSON.stringify([
-      filters.search,
-      filters.categories,
-      filters.brands,
-      filters.collections,
-      filters.skinTypes,
-      pageSize,
-    ]),
+    () => shopKey(filters, pageSize),
     [filters, pageSize],
   );
+
+  // The server's first page stands in for the first request, but only for the
+  // exact selection it was fetched for. Anything else — a mobile page size, a
+  // brand dropped as unknown — differs in key and loads as it always has.
+  const seeded = seed !== undefined && shopKey(seed.filters, seed.pageSize) === key;
+
+  const [items,   setItems]   = useState<Product[]>(() => (seeded ? seed.rows.map(toProduct) : []));
+  const [page,    setPage]    = useState(1);
+  const [total,   setTotal]   = useState(() => (seeded ? seed.total : 0));
+  const [hasMore, setHasMore] = useState(() => (seeded ? seed.hasMore : false));
+  const [busy,    setBusy]    = useState(!seeded);
+
+  /** The request the seed already answered, until something else is asked. */
+  const answered = useRef<string | null>(seeded ? `${key}|1` : null);
 
   const [seenKey, setSeenKey] = useState(key);
   if (seenKey !== key) {
@@ -429,6 +452,9 @@ export function useShopProducts(filters: ProductFilters, pageSize: number): Prod
   }
 
   useEffect(() => {
+    if (answered.current === `${key}|${page}`) return;
+    answered.current = null;
+
     const abort = new AbortController();
 
     const query: Query = { page, limit: pageSize };

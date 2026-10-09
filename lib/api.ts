@@ -98,8 +98,14 @@ export async function fetchPage<T>(
   collection: string,
   query: Query = {},
   signal?: AbortSignal,
+  /** Server only: seconds to reuse the response across requests. */
+  cacheFor?: number,
 ): Promise<Page<T>> {
-  const res = await fetch(buildUrl(collection, query), { headers: API_HEADERS, signal });
+  const res = await fetch(buildUrl(collection, query), {
+    headers: API_HEADERS,
+    signal,
+    ...(cacheFor !== undefined && { next: { revalidate: cacheFor } }),
+  });
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);

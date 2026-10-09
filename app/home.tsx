@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { LiquidLogo } from "@/components/ui/liquid-logo";
@@ -11,66 +10,10 @@ import Link from "next/link";
 import { OutlineButton } from "@/components/ui/button";
 import { ProductCard } from "@/components/ui/product-card";
 import { BundlesSection, OffersSection } from "@/components/ui/collection-strip";
-import { useLoadingGate } from "@/components/ui/loading-gate";
-import { fetchRows } from "@/lib/api";
-import { parseStock } from "@/lib/stock";
+import type { Product } from "@/lib/product";
 
 const EASE = [0.44, 0, 0.56, 1] as const;
 
-
-interface FeaturedProduct {
-  id:       string;
-  slug:     string;
-  title:    string;
-  price:    number;
-  discount: number;
-  imageSrc: string;
-  stock:    number | null;
-}
-
-interface RawFeaturedEntry {
-  id:            string;
-  Slug:          string;
-  Title:         string;
-  "Cover img 1": string;
-  Price:         string;
-  Discount:      string;
-  Stock?:        string;
-}
-
-function useFeaturedProducts(limit: number) {
-  const [products, setProducts] = useState<FeaturedProduct[]>([]);
-  const [loading,  setLoading]  = useState(true);
-
-  useEffect(() => {
-    const abort = new AbortController();
-
-    // A short strip on the home page - ask for exactly the rows it shows
-    // rather than pulling a page of the catalogue and throwing most away.
-    fetchRows<RawFeaturedEntry>("products", { limit }, abort.signal)
-      .then((rows) => {
-        if (abort.signal.aborted) return;
-        setProducts(
-          rows.map((e) => ({
-            id:       e.id,
-            slug:     e.Slug,
-            title:    e.Title,
-            price:    parseFloat(e.Price)        || 0,
-            discount: parseFloat(e.Discount)     || 0,
-            imageSrc: e["Cover img 1"],
-            stock:    parseStock(e.Stock),
-          }))
-        );
-      })
-      .catch(() => setProducts([]))
-      .finally(() => setLoading(false));
-  }, [limit]);
-
-  // Hold the page loader up rather than showing a spinner in the grid.
-  useLoadingGate(loading);
-
-  return { products, loading };
-}
 
 const categories = [
   {
@@ -85,8 +28,14 @@ const categories = [
   },
 ];
 
-export function Home() {
-  const { products: featuredProducts, loading: featuredLoading } = useFeaturedProducts(3);
+export interface HomeData {
+  featured: Product[];
+  offers:   { title?: string; products: Product[] };
+  bundles:  { title?: string; products: Product[] };
+}
+
+/** The home page. Its products are fetched by the server half in `page.tsx`. */
+export function Home({ featured: featuredProducts, offers, bundles }: HomeData) {
 
   return (
     <main>
@@ -120,8 +69,11 @@ export function Home() {
             <SubtitleMd className="w-auto grow !text-white !text-right">Radiance</SubtitleMd>
           </div>
 
-          {/* Hero title */}
-          <Logomark />
+          {/* Hero title — the wordmark is the page's heading; its alt text
+              is what the heading reads as. */}
+          <h1 className="w-full">
+            <Logomark label="GLAZE — Korean skincare" />
+          </h1>
 
         </div>
 
@@ -131,7 +83,7 @@ export function Home() {
       <TickerBar />
 
 
-      <OffersSection />
+      <OffersSection {...offers} />
 
       {/* â”€â”€ Categories â”€â”€ */}
       <section className="w-full flex flex-col justify-start items-center gap-0 p-0 overflow-clip rounded-none">
@@ -203,11 +155,11 @@ export function Home() {
           different copy, and stacked they read as one long band with a heading
           dropped into the middle. The Categories band between them is what
           makes each land as its own thing. */}
-      <BundlesSection />
+      <BundlesSection {...bundles} />
 
       {/* â”€â”€ Featured â”€â”€ */}
       {/* Hidden outright when there is nothing featured. */}
-      {!featuredLoading && featuredProducts.length > 0 && (
+      {featuredProducts.length > 0 && (
         <section className="w-full flex flex-col justify-start items-center gap-[10px] p-0 overflow-visible rounded-none bg-caledon
           py-[32px]
           tablet:py-[40px]
@@ -235,7 +187,7 @@ export function Home() {
                   title={product.title}
                   price={product.price}
                   discount={product.discount}
-                  imageSrc={product.imageSrc}
+                  imageSrc={product.cover_img_1}
                   slug={product.slug}
                   stock={product.stock}
                   href={`/products/${product.slug}`}

@@ -29,6 +29,8 @@ function statusTone(status: string): string {
 }
 
 function OrderCard({ order }: { order: CustomerOrder }) {
+  const deliveryFee = Number(order.DeliveryFee ?? 0);
+
   return (
     <article className="w-full flex flex-col gap-[24px] bg-white p-[24px] tablet:p-[32px] rounded-none">
       <div className="w-full flex flex-wrap justify-between items-start gap-[16px] pb-[16px] border-b border-dashed border-beige">
@@ -75,6 +77,22 @@ function OrderCard({ order }: { order: CustomerOrder }) {
       </div>
 
       <div className="w-full flex flex-col gap-[8px] pt-[16px] border-t border-dashed border-beige">
+        {/* Orders from before delivery was charged carry no fee — their total
+            is just the lines. */}
+        {deliveryFee > 0 && (
+          <>
+            <div className="w-full flex flex-row justify-between items-center">
+              <BodySm className="!text-brown !text-left">Subtotal</BodySm>
+              <BodySm className="!text-black !text-right">
+                ${Math.round((Number(order.Total) - deliveryFee) * 100) / 100}
+              </BodySm>
+            </div>
+            <div className="w-full flex flex-row justify-between items-center">
+              <BodySm className="!text-brown !text-left">Delivery</BodySm>
+              <BodySm className="!text-black !text-right">${deliveryFee}</BodySm>
+            </div>
+          </>
+        )}
         <div className="w-full flex flex-row justify-between items-center">
           <SubtitleMd className="!text-black !text-left">Total</SubtitleMd>
           <SubtitleMd className="!text-black !text-right">${order.Total}</SubtitleMd>

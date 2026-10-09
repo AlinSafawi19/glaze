@@ -39,6 +39,8 @@ export interface CustomerOrder {
   Reference: string;
   Status: string;
   Total: string;
+  /** Included in `Total`. Absent from a backend that predates the fee. */
+  DeliveryFee?: string;
   Placed: string;
   Payment: string;
   Name: string;

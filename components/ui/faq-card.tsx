@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Plus, Minus } from "lucide-react";
 import { useState, useEffect } from "react";
 import { SubtitleSm, SubtitleMd, BodySm } from "./typography";
@@ -39,7 +39,7 @@ function FaqCardBase({
 
   return (
     <div
-      className={`flex flex-col justify-start items-start gap-[8px] p-0 overflow-clip rounded-none max-w-[800px] cursor-pointer ${className}`}
+      className={`flex flex-col justify-start items-start gap-0 p-0 overflow-clip rounded-none max-w-[800px] cursor-pointer ${className}`}
       onMouseEnter={withHover ? () => setHovered(true) : undefined}
       onMouseLeave={withHover ? () => setHovered(false) : undefined}
       onClick={() => setIsOpen((v) => !v)}
@@ -47,6 +47,7 @@ function FaqCardBase({
       {/* Question Wrapper */}
       <button
         type="button"
+        aria-expanded={isOpen}
         className="w-full flex flex-row justify-start items-center gap-[1px] p-0 overflow-clip rounded-none bg-transparent border-none text-left"
       >
         {/* Question Text */}
@@ -91,27 +92,24 @@ function FaqCardBase({
         </motion.div>
       </button>
 
-      {/* Answer Wrapper */}
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            key="answer"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={SPRING}
-            style={{ overflow: "hidden" }}
-          >
-            <div className="w-[476px] flex flex-col justify-start items-start gap-0 p-0 pr-[32px] overflow-clip rounded-none">
-              {/* Answers are shop-written now, and a routine typed as steps
-                  is only readable if the breaks survive. */}
-              <BodySm className="w-full max-w-[600px] whitespace-pre-line !text-black">
-                {answer}
-              </BodySm>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Answer Wrapper — always mounted and folded by height rather than
+          added on open, so the answer is in the page's HTML for search
+          engines while staying out of the way until it is asked for. */}
+      <motion.div
+        initial={false}
+        animate={isOpen ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
+        transition={SPRING}
+        style={{ overflow: "hidden" }}
+        aria-hidden={!isOpen}
+      >
+        <div className="w-[476px] flex flex-col justify-start items-start gap-0 p-0 pt-[8px] pr-[32px] overflow-clip rounded-none">
+          {/* Answers are shop-written now, and a routine typed as steps
+              is only readable if the breaks survive. */}
+          <BodySm className="w-full max-w-[600px] whitespace-pre-line !text-black">
+            {answer}
+          </BodySm>
+        </div>
+      </motion.div>
     </div>
   );
 }

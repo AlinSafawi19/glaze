@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { fetchPage, MAX_PAGE_SIZE } from "@/lib/api";
+import { fetchPage, MAX_PAGE_SIZE, type Query } from "@/lib/api";
 import { toProduct, type Product, type RawProduct } from "@/lib/product";
 
 /**
@@ -38,3 +38,31 @@ export async function getAllProducts(): Promise<Product[]> {
 
   return products;
 }
+
+/**
+ * A page of products for a merchandising strip. Unlike a product page, a strip
+ * that cannot load drops out rather than taking the whole page down with it.
+ */
+export async function getProducts(query: Query): Promise<Product[]> {
+  try {
+    const { rows } = await fetchPage<RawProduct>("products", query);
+    return rows.map(toProduct);
+  } catch {
+    return [];
+  }
+}
+
+export interface Collection {
+  slug:  string;
+  title: string;
+}
+
+/** The dashboard's collection names, keyed by slug. Empty if the list cannot load. */
+export const getCollections = cache(async (): Promise<Collection[]> => {
+  try {
+    const { rows } = await fetchPage<{ Slug: string; Title: string }>("collections", { limit: MAX_PAGE_SIZE });
+    return rows.map((r) => ({ slug: r.Slug, title: r.Title }));
+  } catch {
+    return [];
+  }
+});

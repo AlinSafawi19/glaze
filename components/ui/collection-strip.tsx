@@ -1,138 +1,21 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { H4, ItalicBodySm } from "./typography";
 import { OutlineButton } from "./button";
 import { ProductCard } from "./product-card";
-import { useLoadingGate } from "./loading-gate";
-import { relationSlug, type Relation } from "@/lib/relations";
-import { fetchRows, MAX_PAGE_SIZE } from "@/lib/api";
-import { parseStock } from "@/lib/stock";
-
-
-interface RawProduct {
-  id:            string;
-  Slug:          string;
-  Title:         string;
-  "Cover img 1": string;
-  Price:         string;
-  Discount:      string;
-  Collections:   Relation;
-  Stock?:        string;
-}
-
-interface RawCollection {
-  Slug:  string;
-  Title: string;
-}
-
-interface StripProduct {
-  id:         string;
-  slug:       string;
-  title:      string;
-  price:      number;
-  discount:   number;
-  imageSrc:   string;
-  stock:      number | null;
-  collection: string;
-}
+import type { Product } from "@/lib/product";
 
 /** How many products a strip shows before "see all". */
-const STRIP_SIZE = 8;
-
-/**
- * The collection list, shared by every strip on the page.
- *
- * Only the headings: each strip fetches its own products, so this is a short
- * list of names rather than a catalogue, and one request covers all of them.
- */
-let collectionsCache: Promise<RawCollection[]> | null = null;
-
-function loadCollections(): Promise<RawCollection[]> {
-  if (!collectionsCache) {
-    collectionsCache = fetchRows<RawCollection>("collections", { limit: MAX_PAGE_SIZE })
-      .catch(() => {
-        collectionsCache = null; // let the next mount try again
-        return [];
-      });
-  }
-  return collectionsCache;
-}
-
-function toStripProduct(e: RawProduct): StripProduct {
-  return {
-    id:         e.id,
-    slug:       e.Slug,
-    title:      e.Title,
-    price:      parseFloat(e.Price)    || 0,
-    discount:   parseFloat(e.Discount) || 0,
-    imageSrc:   e["Cover img 1"],
-    stock:      parseStock(e.Stock),
-    collection: relationSlug(e.Collections),
-  };
-}
-
-/**
- * One strip's products, asked for by collection.
- *
- * The filter is the server's, so a strip costs the eight rows it shows however
- * large the catalogue is - and a collection whose products sit deep in the
- * table is no longer a strip that renders empty.
- */
-function useStripProducts(collectionSlug: string) {
-  // Null means "still asking". A strip with no collection behind it has nothing
-  // to ask for, so it starts settled and empty.
-  const [products, setProducts] = useState<StripProduct[] | null>(
-    () => (collectionSlug ? null : []),
-  );
-
-  useEffect(() => {
-    if (!collectionSlug) return;
-
-    const abort = new AbortController();
-
-    fetchRows<RawProduct>(
-      "products",
-      { collection: [collectionSlug], limit: STRIP_SIZE },
-      abort.signal,
-    )
-      .then((rows) => { if (!abort.signal.aborted) setProducts(rows.map(toStripProduct)); })
-      .catch(() => { if (!abort.signal.aborted) setProducts([]); });
-
-    return () => abort.abort();
-  }, [collectionSlug]);
-
-  return products;
-}
-
-function useCollection(slug: string) {
-  const [collections, setCollections] = useState<RawCollection[] | null>(null);
-  const products = useStripProducts(slug);
-
-  useEffect(() => {
-    let alive = true;
-    loadCollections().then((rows) => { if (alive) setCollections(rows); });
-    return () => { alive = false; };
-  }, []);
-
-  const loading = collections === null || products === null;
-
-  // Part of the home page proper, so it holds the page loader up.
-  useLoadingGate(loading);
-
-  return {
-    loading,
-    products:   products ?? [],
-    collection: collections?.find((c) => c.Slug === slug) ?? null,
-  };
-}
+export const STRIP_SIZE = 8;
 
 export interface CollectionStripProps {
   /** The entry in the dashboard `collections` list that drives this strip. */
   slug: string;
+  /** The collection's name on the dashboard, when it has one. */
+  title?: string;
   /** Heading to use until the dashboard has a collection under that slug. */
   fallbackTitle: string;
+  /** Fetched on the server, so the strip is in the page's first HTML. */
+  products: Product[];
   /** A collection carries only a name, so its supporting copy lives here. */
   tagline: string;
   cta: string;
@@ -152,19 +35,19 @@ export interface CollectionStripProps {
  */
 export function CollectionStrip({
   slug,
+  title,
   fallbackTitle,
+  products,
   tagline,
   cta,
   background = "bg-dusty",
 }: CollectionStripProps) {
-  const { products, collection, loading } = useCollection(slug);
-
   // Land on the shop with this collection already ticked in the filters.
   const shopAllHref = `/shop-all?collection=${slug}`;
 
   // Nothing tagged into the collection — the section drops out entirely rather
   // than standing there empty.
-  if (loading || products.length === 0) return null;
+  if (products.length === 0) return null;
 
   return (
     <section className={`w-full flex flex-col justify-start items-center gap-[10px] p-0 overflow-clip rounded-none ${background}`}>
@@ -179,7 +62,7 @@ export function CollectionStrip({
 
           <div className="flex flex-col justify-start items-start gap-[4px] min-w-0">
             <H4 className="w-full !text-brown !text-left [text-wrap:balance]">
-              {collection?.Title || fallbackTitle}
+              {title || fallbackTitle}
             </H4>
             <ItalicBodySm className="w-full !text-brown !text-left [text-wrap:balance]">
               {tagline}
@@ -203,7 +86,7 @@ export function CollectionStrip({
               title={p.title}
               price={p.price}
               discount={p.discount}
-              imageSrc={p.imageSrc}
+              imageSrc={p.cover_img_1}
               stock={p.stock}
               href={`/products/${p.slug}`}
               className="!w-full"
@@ -216,9 +99,12 @@ export function CollectionStrip({
   );
 }
 
-export function OffersSection() {
+type StripData = Pick<CollectionStripProps, "title" | "products">;
+
+export function OffersSection(data: StripData) {
   return (
     <CollectionStrip
+      {...data}
       slug="offers"
       fallbackTitle="Offers"
       tagline="reduced while stocks last"
@@ -228,9 +114,10 @@ export function OffersSection() {
   );
 }
 
-export function BundlesSection() {
+export function BundlesSection(data: StripData) {
   return (
     <CollectionStrip
+      {...data}
       slug="bundles"
       fallbackTitle="Bundles"
       tagline="save when you buy the set"

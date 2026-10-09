@@ -6,6 +6,9 @@ import { ImgBox } from "@/components/ui/img-box";
 export default function About() {
   return (
     <main>
+      {/* No title on screen — the design opens on imagery — so the page's
+          heading is for search engines and screen readers. */}
+      <h1 className="sr-only">About GLAZE — authentic Korean skincare</h1>
 
       {/* ── About Info ── */}
       <section className="w-full flex flex-col justify-start items-center gap-0 p-0 overflow-clip rounded-none">

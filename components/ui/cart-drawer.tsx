@@ -12,6 +12,7 @@ import { useCart, useCartDrawer } from "./use-cart";
 import { useProducts } from "./use-products";
 import { ProductImage } from "./product-image";
 import { maxOrderable } from "@/lib/stock";
+import { useDeliveryFee } from "./use-delivery-fee";
 import { useScrollLock } from "./use-scroll-lock";
 
 // Long, low-bounce ease so the panel glides rather than snaps.
@@ -21,6 +22,7 @@ const FADE  = { duration: 0.35, ease: [0.32, 0.72, 0, 1] as [number, number, num
 export function CartDrawer() {
   const { open, setOpen } = useCartDrawer();
   const { lines, setQty, remove } = useCart();
+  const deliveryFee = useDeliveryFee();
   const { products } = useProducts(lines.map((line) => line.slug));
   const pathname = usePathname();
 
@@ -148,9 +150,19 @@ export function CartDrawer() {
             {/* Footer */}
             {items.length > 0 && (
               <div className="w-full flex flex-col justify-start items-start gap-[16px] px-[20px] py-[20px] border-t border-dashed border-beige shrink-0">
+                <div className="w-full flex flex-col gap-[6px]">
+                  <div className="w-full flex flex-row justify-between items-center">
+                    <BodySm className="!text-brown !text-left">Subtotal</BodySm>
+                    <BodySm className="!text-black !text-right">${subtotal}</BodySm>
+                  </div>
+                  <div className="w-full flex flex-row justify-between items-center">
+                    <BodySm className="!text-brown !text-left">Delivery</BodySm>
+                    <BodySm className="!text-black !text-right">{deliveryFee === null ? "Added at checkout" : `$${deliveryFee}`}</BodySm>
+                  </div>
+                </div>
                 <div className="w-full flex flex-row justify-between items-center">
                   <SubtitleMd className="!text-black !text-left">Total</SubtitleMd>
-                  <SubtitleMd className="!text-black !text-right">${subtotal}</SubtitleMd>
+                  <SubtitleMd className="!text-black !text-right">{deliveryFee === null ? `$${subtotal} + delivery` : `$${subtotal + deliveryFee}`}</SubtitleMd>
                 </div>
                 <BodySm className="w-full !text-brown !text-left">Cash on delivery</BodySm>
                 {blocked.length > 0 && (

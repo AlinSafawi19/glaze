@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL, absoluteUrl } from "@/lib/site";
+import { getCollections, getProducts } from "@/lib/catalog";
+import { STRIP_SIZE } from "@/components/ui/collection-strip";
 import { Home } from "./home";
+
+/** How many products the Featured row shows. */
+const FEATURED_COUNT = 3;
+
+/** Cached and refreshed every five minutes, like the product pages. */
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
@@ -31,14 +39,28 @@ const JSON_LD = [
   },
 ];
 
-export default function Page() {
+export default async function Page() {
+  // Every read degrades to empty, so a dashboard outage hides the product
+  // rows rather than the home page.
+  const [featured, offers, bundles, collections] = await Promise.all([
+    getProducts({ limit: FEATURED_COUNT }),
+    getProducts({ collection: ["offers"],  limit: STRIP_SIZE }),
+    getProducts({ collection: ["bundles"], limit: STRIP_SIZE }),
+    getCollections(),
+  ]);
+  const titleOf = (slug: string) => collections.find((c) => c.slug === slug)?.title;
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD).replace(/</g, "\\u003c") }}
       />
-      <Home />
+      <Home
+        featured={featured}
+        offers={{  title: titleOf("offers"),  products: offers  }}
+        bundles={{ title: titleOf("bundles"), products: bundles }}
+      />
     </>
   );
 }

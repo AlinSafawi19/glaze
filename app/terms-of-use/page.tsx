@@ -26,6 +26,9 @@ export default function TermsOfUse() {
 
   return (
     <main>
+      {/* No title on screen — the design opens on imagery — so the page's
+          heading is for search engines and screen readers. */}
+      <h1 className="sr-only">Terms of use</h1>
 
       {/* â”€â”€ Content â”€â”€ */}
       <motion.section

@@ -14,10 +14,11 @@ import {
   useDebounced,
   useFilterOptions,
   useShopProducts,
+  type ShopSeed,
 } from "./use-shop-data";
+import { DESKTOP_PAGE_SIZE } from "@/lib/shop";
 
-/** Products per request. The grid's "load more" asks for the next page. */
-const DESKTOP_PAGE_SIZE = 12;
+/** Products per request on mobile. The grid's "load more" asks for the next page. */
 const MOBILE_PAGE_SIZE  = 8;
 
 /** Filter options per request, per group. */
@@ -245,7 +246,7 @@ function useParamSet(
   return { selected, toggle, clear, commit };
 }
 
-export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}) {
+export function ShopSection({ collectionSlug, seed }: { collectionSlug?: string; seed?: ShopSeed } = {}) {
   const [isMobile, setIsMobile] = useState(false);
   const grid = useGridColumns();
 
@@ -378,7 +379,7 @@ export function ShopSection({ collectionSlug }: { collectionSlug?: string } = {}
 
   const filters = useMemo(() => ({ search, ...settled }), [search, settled]);
 
-  const products = useShopProducts(filters, pageSize);
+  const products = useShopProducts(filters, pageSize, collectionSlug ? undefined : seed);
 
   // The shop is the page - hold the loader up rather than filling the grid with
   // a spinner. Only while there is nothing to show: a filter change over a grid

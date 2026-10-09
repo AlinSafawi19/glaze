@@ -11,9 +11,11 @@ import { useLoadingGate } from "@/components/ui/loading-gate";
 import { SectionLoading } from "@/components/ui/section-loading";
 import { ProductImage } from "@/components/ui/product-image";
 import { maxOrderable } from "@/lib/stock";
+import { useDeliveryFee } from "@/components/ui/use-delivery-fee";
 
 export default function Cart() {
   const { lines, ready, setQty, remove } = useCart();
+  const deliveryFee = useDeliveryFee();
   const { products, loading } = useProducts(lines.map((line) => line.slug));
 
   const items = lines
@@ -147,13 +149,13 @@ export default function Cart() {
                   </div>
                   <div className="w-full flex flex-row justify-between items-center">
                     <BodySm className="!text-brown !text-left">Delivery</BodySm>
-                    <BodySm className="!text-black !text-right">Calculated on delivery</BodySm>
+                    <BodySm className="!text-black !text-right">{deliveryFee === null ? "Added at checkout" : `$${deliveryFee}`}</BodySm>
                   </div>
                 </div>
 
                 <div className="w-full flex flex-row justify-between items-center pt-[16px] border-t border-dashed border-beige">
                   <SubtitleMd className="!text-black !text-left">Total</SubtitleMd>
-                  <SubtitleMd className="!text-black !text-right">${subtotal}</SubtitleMd>
+                  <SubtitleMd className="!text-black !text-right">{deliveryFee === null ? `$${subtotal} + delivery` : `$${subtotal + deliveryFee}`}</SubtitleMd>
                 </div>
 
                 <div className="w-full bg-blush px-[16px] py-[12px] rounded-none">

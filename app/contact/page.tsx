@@ -40,6 +40,9 @@ export default function Contact() {
 
   return (
     <main>
+      {/* No title on screen — the design opens on imagery — so the page's
+          heading is for search engines and screen readers. */}
+      <h1 className="sr-only">Contact GLAZE</h1>
 
       {/* ── FAQ ── */}
       <motion.section

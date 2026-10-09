@@ -8,6 +8,7 @@ import { useCart } from "@/components/ui/use-cart";
 import { useProducts } from "@/components/ui/use-products";
 import { ProductImage } from "@/components/ui/product-image";
 import { maxOrderable } from "@/lib/stock";
+import { useDeliveryFee } from "@/components/ui/use-delivery-fee";
 import { placeOrder } from "@/lib/actions/account";
 import { useLoadingGate } from "@/components/ui/loading-gate";
 import { SectionLoading } from "@/components/ui/section-loading";
@@ -27,6 +28,7 @@ export interface CheckoutIdentity {
 
 export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
   const { lines, ready, clear } = useCart();
+  const deliveryFee = useDeliveryFee();
   const { products, loading }   = useProducts(lines.map((line) => line.slug));
 
   const [name,    setName]    = useState(identity.name);
@@ -268,9 +270,20 @@ export function CheckoutForm({ identity }: { identity: CheckoutIdentity }) {
                   ))}
                 </div>
 
+                <div className="w-full flex flex-col gap-[10px] pt-[16px] border-t border-dashed border-beige">
+                  <div className="w-full flex flex-row justify-between items-center">
+                    <BodySm className="!text-brown !text-left">Subtotal</BodySm>
+                    <BodySm className="!text-black !text-right">${subtotal}</BodySm>
+                  </div>
+                  <div className="w-full flex flex-row justify-between items-center">
+                    <BodySm className="!text-brown !text-left">Delivery</BodySm>
+                    <BodySm className="!text-black !text-right">{deliveryFee === null ? "Added at checkout" : `$${deliveryFee}`}</BodySm>
+                  </div>
+                </div>
+
                 <div className="w-full flex flex-row justify-between items-center pt-[16px] border-t border-dashed border-beige">
                   <SubtitleMd className="!text-black !text-left">Total</SubtitleMd>
-                  <SubtitleMd className="!text-black !text-right">${subtotal}</SubtitleMd>
+                  <SubtitleMd className="!text-black !text-right">{deliveryFee === null ? `$${subtotal} + delivery` : `$${subtotal + deliveryFee}`}</SubtitleMd>
                 </div>
 
                 <Link href="/cart" className="w-full">
